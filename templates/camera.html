@@ -3,11 +3,11 @@
 {% block title %}ANALYTICS | SENTINEL ALPHA{% endblock %}
 
 {% block content %}
-<div class="grid grid-cols-12 gap-8 h-full">
-  <section class="col-span-12 lg:col-span-4 flex flex-col gap-8 h-full">
+<div class="grid grid-cols-12 gap-8 h-full p-6">
+  <section class="col-span-12 lg:col-span-4 flex flex-col gap-6 h-full">
     <div class="bg-surface-container p-10 rounded-sm flex-1 flex flex-col border border-white/5 shadow-2xl">
       <h2 class="font-headline text-xl font-black tracking-[0.25em] text-emerald-500 mb-4 uppercase">Neural media input</h2>
-      <p class="text-xs text-slate-500 font-mono mb-6 leading-relaxed">Drop an <strong class="text-slate-400">image</strong> or <strong class="text-slate-400">video</strong> (MP4, MKV, AVI, MOV, WebM). Uses <code class="text-emerald-500/90">weapon_model.pt</code> only.</p>
+      <p class="text-xs text-slate-500 font-mono mb-6 leading-relaxed">Drop an <strong class="text-slate-400">image</strong> or <strong class="text-slate-400">video</strong> (MP4, MKV, AVI, MOV, WebM). Image scans archive classified detections so they appear in the evidence log.</p>
 
       <div id="dropZoneImg" class="flex-1 min-h-[200px] border-2 border-dashed border-emerald-500/20 rounded-sm flex flex-col items-center justify-center p-10 bg-slate-950/40 group hover:border-emerald-500 hover:bg-emerald-500/5 transition-all duration-500 cursor-pointer relative overflow-hidden">
         <span class="material-symbols-outlined text-8xl text-slate-700 mb-6 group-hover:text-emerald-500 group-hover:scale-110 transition-all">perm_media</span>
@@ -23,15 +23,25 @@
       </div>
     </div>
 
-    <div class="bg-surface-container p-10 rounded-sm border border-white/5 shadow-xl">
-      <h2 class="font-headline text-lg font-black tracking-[0.25em] text-emerald-500 mb-6 uppercase">Metadata</h2>
+    <div class="bg-surface-container p-8 rounded-sm border border-white/5 shadow-xl">
+      <h2 class="font-headline text-lg font-black tracking-[0.25em] text-emerald-500 mb-4 uppercase">Selected File</h2>
       <div id="metaContent" class="space-y-4 opacity-70 font-mono text-[13px] leading-loose">
         Waiting for file…
       </div>
     </div>
+
+    <div class="bg-surface-container p-8 rounded-sm border border-white/5 shadow-xl">
+      <div class="flex items-center justify-between gap-3 mb-4">
+        <h2 class="font-headline text-lg font-black tracking-[0.25em] text-emerald-500 uppercase">Scan Findings</h2>
+        <a id="openLogsLink" href="/logs" class="hidden text-[11px] font-mono uppercase tracking-[0.16em] text-emerald-300 hover:text-emerald-200">Open Archive</a>
+      </div>
+      <div id="scanSummary" class="space-y-3 font-mono text-[12px] leading-relaxed text-slate-400">
+        Awaiting scan results…
+      </div>
+    </div>
   </section>
 
-  <section class="col-span-12 lg:col-span-8 flex flex-col gap-8 h-full">
+  <section class="col-span-12 lg:col-span-8 flex flex-col gap-6 h-full">
     <div class="flex-1 min-h-[320px] bg-black rounded-sm relative overflow-hidden border border-white/5 group flex items-center justify-center shadow-2xl">
       <img id="imageDisplay" src="" alt="" class="max-w-full max-h-[70vh] object-contain hidden" />
       <video id="videoDisplay" class="max-w-full max-h-[70vh] object-contain hidden" controls playsinline></video>
@@ -127,9 +137,17 @@
   const scanLine = document.getElementById('scanLine');
   const videoBusy = document.getElementById('videoBusy');
   const metaBox = document.getElementById('metaContent');
+  const scanSummary = document.getElementById('scanSummary');
+  const openLogsLink = document.getElementById('openLogsLink');
 
   let selectedFile = null;
   let previewVideoUrl = null;
+  let baseMetaHtml = 'Waiting for file…';
+
+  function setScanSummary(html, showLogs) {
+    scanSummary.innerHTML = html;
+    openLogsLink.classList.toggle('hidden', !showLogs);
+  }
 
   function revokePreview() {
     if (previewVideoUrl) {
@@ -140,7 +158,7 @@
 
   function updateMeta(file) {
     metaBox.classList.remove('opacity-40', 'italic');
-    metaBox.innerHTML =
+    baseMetaHtml =
       '<div class="flex justify-between gap-2"><span>Name</span><span class="truncate max-w-[180px]" title="' +
       escapeHtml(file.name) +
       '">' +
@@ -158,6 +176,7 @@
       '<div class="flex justify-between"><span>Mode</span><span>' +
       (isVideoFile(file) ? 'Video → /detect/video' : 'Image → /detect/image') +
       '</span></div>';
+    metaBox.innerHTML = baseMetaHtml;
   }
 
   function escapeHtml(s) {
@@ -190,6 +209,7 @@
       reader.readAsDataURL(file);
     }
     updateMeta(file);
+    setScanSummary('<div class="text-slate-500">File staged. Run analysis to view classified findings and archive status.</div>', false);
   }
 
   dropZone.onclick = () => fileInput.click();
@@ -265,7 +285,8 @@
 
         var dl = String(data.download_url || '').replace(/"/g, '');
         metaBox.innerHTML =
-          '<div class="text-emerald-400/90">Video export ready</div>' +
+          baseMetaHtml +
+          '<div class="pt-3 mt-3 border-t border-white/10 text-emerald-400/90">Video export ready</div>' +
           '<div class="flex justify-between mt-2"><span>Frames</span><span>' +
           (data.frames_processed || 0) +
           '</span></div>' +
@@ -277,11 +298,21 @@
           '" download="sentinel_analyzed_' +
           Date.now() +
           '.mp4">Download MP4 <span class="material-symbols-outlined text-sm">download</span></a>';
+        setScanSummary(
+          '<div class="rounded-sm border border-emerald-500/20 bg-emerald-500/5 p-3">' +
+          '<div class="text-emerald-300 uppercase tracking-[0.18em] text-[10px]">Video scan complete</div>' +
+          '<div class="mt-2 flex justify-between"><span>Frames processed</span><span>' + (data.frames_processed || 0) + '</span></div>' +
+          '<div class="mt-1 flex justify-between"><span>Detections</span><span>' + (data.total_detections || 0) + '</span></div>' +
+          '<div class="mt-1 text-slate-500">Evidence logs are created only for alert-worthy frames during video processing.</div>' +
+          '</div>',
+          Boolean(data.total_detections)
+        );
       } catch (e) {
         console.error(e);
         document.getElementById('metricConfDelta').textContent = 'Network error';
         document.getElementById('metricStatus').textContent = 'ERROR';
         alert('Network error while uploading video.');
+        setScanSummary('<div class="text-red-300">Video scan failed. Please retry with another file.</div>', false);
       } finally {
         videoBusy.classList.add('hidden');
         runBtn.disabled = false;
@@ -327,29 +358,40 @@
         document.getElementById('metricTimeBar').style.width = Math.min(100, data.latency_ms / 20) + '%';
         document.getElementById('metricStatus').textContent = 'OK';
 
-        const lines =
-          (data.detections || [])
-            .map(function (d) {
-              const raw = d.model_class
-                ? ' <span class="text-slate-500">(' + escapeHtml(String(d.model_class)) + ')</span>'
-                : '';
-              return (
-                '<div class="flex justify-between gap-2"><span>' +
-                escapeHtml(d.class_name) +
-                raw +
-                '</span><span>' +
-                (d.confidence * 100).toFixed(1) +
-                '%</span></div>'
-              );
-            })
-            .join('') || '<div class="text-slate-500">No detections</div>';
         metaBox.innerHTML =
-          lines + '<div class="pt-2 border-t border-white/10 mt-2 text-slate-500">' + data.latency_ms + ' ms</div>';
+          baseMetaHtml +
+          '<div class="pt-3 mt-3 border-t border-white/10 flex justify-between text-slate-400"><span>Latency</span><span>' + data.latency_ms + ' ms</span></div>' +
+          '<div class="flex justify-between text-slate-400"><span>Archive logs</span><span>' + (data.logs_created || 0) + '</span></div>';
+
+        const findings =
+          (data.detections || []).map(function (d) {
+            return (
+              '<div class="rounded-sm border border-white/10 bg-slate-950/50 p-3">' +
+              '<div class="flex items-center justify-between gap-3">' +
+              '<div><div class="text-emerald-300 font-bold uppercase tracking-[0.12em]">' + escapeHtml(d.class_name) + '</div>' +
+              '<div class="mt-1 text-[10px] text-slate-500 uppercase tracking-[0.14em]">' + escapeHtml(d.model_class || 'mapped') + ' • ' + escapeHtml(d.risk_level || 'Low') + '</div></div>' +
+              '<div class="text-right"><div class="text-slate-200">' + (d.confidence * 100).toFixed(1) + '%</div>' +
+              '<div class="mt-1 text-[10px] ' + (d.logged ? 'text-emerald-300' : 'text-slate-500') + '">' + (d.logged ? 'ARCHIVED' : 'NOT LOGGED') + '</div></div>' +
+              '</div>' +
+              '</div>'
+            );
+          }).join('') || '<div class="text-slate-500">No weapons detected in this scan.</div>';
+
+        const summaryHeader =
+          '<div class="rounded-sm border border-emerald-500/20 bg-emerald-500/5 p-3">' +
+          '<div class="text-emerald-300 uppercase tracking-[0.18em] text-[10px]">Image scan complete</div>' +
+          '<div class="mt-2 flex justify-between"><span>Detections</span><span>' + (data.total || 0) + '</span></div>' +
+          '<div class="mt-1 flex justify-between"><span>Archive logs</span><span>' + (data.logs_created || 0) + '</span></div>' +
+          '<div class="mt-1 text-slate-500">Each archived entry now carries class, source mode, risk, and ROI metadata.</div>' +
+          '</div>';
+
+        setScanSummary(summaryHeader + findings, Boolean(data.logs_created));
       }
     } catch (e) {
       console.error(e);
       document.getElementById('metricConfDelta').textContent = 'Network error';
       document.getElementById('metricStatus').textContent = 'ERROR';
+      setScanSummary('<div class="text-red-300">Image scan failed. Please retry.</div>', false);
     } finally {
       setTimeout(function () {
         scanLine.classList.add('hidden');

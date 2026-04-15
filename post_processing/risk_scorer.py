@@ -1,16 +1,11 @@
 """
-post_processing/risk_scorer.py — Context-Aware Risk Scoring
+post_processing/risk_scorer.py -- Context-Aware Risk Scoring
 
-Formula: R = w1*Cs + w2*As + w3*Ps
-  Cs = EMA-smoothed confidence
-  As = normalized bounding box area (bbox_area / frame_area)
-  Ps = spatial priority score: 1.0 if in ROI or central region, 0.5 otherwise
-  Weights: w1=0.5, w2=0.3, w3=0.2
-
-Risk levels:
-  Low    : R < 0.40
-  Medium : 0.40 ≤ R < 0.70
-  High   : R ≥ 0.70
+Risk is derived from:
+- effective confidence when scene filtering has adjusted it, otherwise raw confidence
+- relative box area
+- spatial priority (ROI / central bias)
+- class severity so long guns rank above small blades at the same confidence
 """
 
 from typing import Dict, List, Tuple
@@ -31,6 +26,12 @@ class RiskScorer:
         self.w1 = w1
         self.w2 = w2
         self.w3 = w3
+        self.class_severity = {
+            "Shotgun": 1.0,
+            "Rifle": 0.95,
+            "Handgun": 0.85,
+            "Knife": 0.65,
+        }
 
     def _compute_area_score(self, bbox: List[int], frame_shape: Tuple[int, int]) -> float:
         """Normalized bounding box area relative to frame area."""
@@ -102,14 +103,26 @@ class RiskScorer:
         dict
             {risk_score: float, risk_level: str}
         """
-        cs = float(detection.get("confidence", 0.0))
+        cs = float(detection.get("effective_confidence", detection.get("confidence", 0.0)))
         bbox = detection.get("bbox", [0, 0, 10, 10])
+        class_name = detection.get("class_name", "")
 
         as_score = self._compute_area_score(bbox, frame_shape)
         ps = self._compute_spatial_priority(bbox, frame_shape, roi_zones, in_roi)
+        severity = self.class_severity.get(class_name, 0.75)
 
         r = self.w1 * cs + self.w2 * as_score + self.w3 * ps
+        r *= 0.65 + (0.35 * severity)
         r = round(min(1.0, r), 4)
         level = self.get_risk_level(r)
 
-        return {"risk_score": r, "risk_level": level}
+        return {
+            "risk_score": r,
+            "risk_level": level,
+            "risk_components": {
+                "confidence": round(cs, 4),
+                "area": round(as_score, 4),
+                "spatial_priority": round(ps, 4),
+                "class_severity": round(severity, 4),
+            },
+        }

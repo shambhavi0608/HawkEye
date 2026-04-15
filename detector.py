@@ -1,11 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-detector.py  --  Weapon detector (Hugging Face weights only)
+detector.py -- weapon detection runtime
 
-Loads Subh775/Threat-Detection-YOLOv8n weights as weapon_model.pt (see download_model.py).
-If the file is missing, attempts a one-time download via huggingface_hub.
+The current runtime uses a dual-engine inference path:
+- `yolov8s.pt` as the primary general detector.
+- `weapon_model.pt` as an optional auxiliary Hugging Face weapon detector.
 
-No secondary COCO model — all weapon inference uses this checkpoint only.
+This repository does not bundle a custom-trained checkpoint or validation report.
+Confidence values returned here are raw model confidences and must not be treated
+as paper-level accuracy metrics.
 """
 
 import cv2
@@ -74,10 +77,11 @@ RISK_COLORS = {
 
 class WeaponDetector:
     """
-    Advanced Neural Surveillance Engine using YOLOv8l (Large) backbone.
-    Utilizes a Dual-Engine approach:
-    1. YOLOv8l: High-precision general object and knife detection.
-    2. Sentinel-Nano: High-frequency specialized firearm detection.
+    Runtime detector for the shipped Flask demo.
+
+    It combines a general YOLOv8 model with an optional auxiliary weapon model
+    when `weapon_model.pt` is present. The output should be treated as an
+    application inference signal, not as a validated benchmark result.
     """
 
     def __init__(
@@ -97,7 +101,12 @@ class WeaponDetector:
         self.half = self.device == "cuda"
 
         # Load Core Backbone (YOLOv8s)
-        self.model_path = os.path.abspath(model_path) if model_path and os.path.isfile(model_path) else "yolov8s.pt"
+        engine_path = os.path.abspath("weapon_model.engine")
+        if os.path.exists(engine_path):
+            self.model_path = engine_path
+            print("[WeaponDetector] EDGE ACCELERATOR: TensorRT Engine Selected.")
+        else:
+            self.model_path = os.path.abspath(model_path) if model_path and os.path.isfile(model_path) else "yolov8s.pt"
         self.model = YOLO(self.model_path)
         self.model.to(self.device)
         try:
@@ -240,18 +249,12 @@ class WeaponDetector:
                 elif (bh > h * 0.20 and aspect < 0.45):
                     weapon_cls = "Shotgun"
             
-            # --- RESEARCH-ALIGNED CONFIDENCE CALIBRATION ---
-            # Paper Claim: mAP@50 = 0.961. 
-            # We use a non-linear scaling to align raw inference with the validated 5-fold CV results.
             c = float(conf)
-            # This curve pins high-quality detections to the validated 0.96+ range.
-            calibrated_c = 0.7 + (0.28 * (c ** 0.45))
-            final_conf = min(0.961, calibrated_c) if c > 0.4 else calibrated_c
             
             out.append(
                 {
                     "class_name": weapon_cls,
-                    "confidence": round(final_conf, 4),
+                    "confidence": round(c, 4),
                     "raw_confidence": round(c, 4),
                     "bbox": bbox,
                     "coco_name": raw,
@@ -302,6 +305,13 @@ class WeaponDetector:
                 if not is_dup:
                     all_detections.append(ad)
 
+        for det in all_detections:
+            det.setdefault("risk_score", round(float(det.get("confidence", 0.0)), 4))
+            det.setdefault(
+                "risk_level",
+                "High" if det["risk_score"] >= 0.75 else "Medium" if det["risk_score"] >= 0.45 else "Low",
+            )
+
         latency = (time.perf_counter() - t0) * 1000.0
         return all_detections, latency
 
@@ -344,9 +354,12 @@ class WeaponDetector:
 
     def switch_model(self, model_path: str | None, input_size: int):
         """Edge mode: only input resolution changes; optional explicit weight path."""
-        if model_path is not None and os.path.isfile(str(model_path)):
-            self.model = YOLO(model_path)
-            self.model_path = os.path.abspath(model_path)
+        engine_fallback = os.path.abspath("weapon_model.engine")
+        chosen_path = engine_fallback if os.path.exists(engine_fallback) else model_path
+        if chosen_path is not None and os.path.isfile(str(chosen_path)):
+            self.model = YOLO(chosen_path)
+            self.model_path = os.path.abspath(chosen_path)
+            if self.model_path.endswith('.engine'): print('[WeaponDetector] Edge Mode Active: TensorRT Engine.')
             self.class_names = self.model.names
             self._gun_class_id = _resolve_gun_class_id(self.class_names)
         self.input_size = input_size

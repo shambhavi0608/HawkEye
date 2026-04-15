@@ -37,6 +37,7 @@ class EvidenceLogger:
         risk_result: Dict,
         session_id: str,
         roi_zone: Optional[list] = None,
+        source_mode: str = "live",
     ) -> Optional[str]:
         """
         Log a high-confidence detection event.
@@ -72,10 +73,17 @@ class EvidenceLogger:
             metadata = {
                 "timestamp": now.isoformat(),
                 "class": detection.get("class_name"),
+                "class_name": detection.get("class_name"),
+                "classification": detection.get("class_name"),
+                "model_class": detection.get("coco_name"),
                 "confidence": detection.get("confidence"),
                 "bbox": detection.get("bbox"),
                 "risk_score": risk_result.get("risk_score"),
                 "risk_level": risk_level,
+                "risk_components": risk_result.get("risk_components"),
+                "detection_id": detection.get("detection_id"),
+                "source_mode": source_mode,
+                "in_roi": bool(detection.get("in_roi", False)),
                 "roi_zone": roi_zone,
                 "session_id": session_id,
                 "frame_file": img_filename,

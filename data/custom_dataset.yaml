@@ -1,0 +1,19 @@
+# YOLOv8 Custom Weapon Dataset (25,000 images)
+# ==============================================================================
+# This configuration satisfies the exact 4 classes described in the 
+# IEEE paper research metrics.
+
+path: ./  # Path mapped inside training environment
+train: images/train  # Set to absolute path to your train images
+val: images/val      # Set to absolute path to your validation images
+test: images/test    # Set to absolute path to your test images (optional)
+
+# Number of classes
+nc: 4
+
+# Class names Mapping (Strict adherence to 4 proper classes to avoid "Gun" overlap)
+names:
+  0: Handgun
+  1: Knife
+  2: Rifle
+  3: Shotgun

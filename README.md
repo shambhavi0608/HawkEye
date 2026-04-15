@@ -1,115 +1,67 @@
-<div align="center">
-  
-  <h1 align="center">🛡️ AEGI : SENTINEL ALPHA 🛡️</h1>
-  <p align="center">
-    <strong>Advanced Neural Surveillance & Real-Time Weapon Detection Pipeline (Sentinel-Core Edition)</strong>
-  </p>
+# Sentinel Alpha
 
-  <p align="center">
-    <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python" alt="Python">
-    <img src="https://img.shields.io/badge/Framework-Flask-black?style=for-the-badge&logo=flask" alt="Flask">
-    <img src="https://img.shields.io/badge/Neural_Engine-YOLOv8s-orange?style=for-the-badge&logo=pytorch" alt="YOLOv8s">
-    <img src="https://img.shields.io/badge/Vision-OpenCV-green?style=for-the-badge&logo=opencv" alt="OpenCV">
-  </p>
-</div>
+Flask-based weapon detection demo with live webcam, image upload, video processing,
+ROI polygons, evidence logging, low-light CLAHE preprocessing, and a multi-stage
+post-processing pipeline.
 
----
+## Current repo status
 
-## 🌌 Overview
-**AEGI : SENTINEL ALPHA** is a state-of-the-art, multi-class neural threat detection system designed for real-time surveillance. Driven by a high-performance **YOLOv8s (Small)** Neural Synthesis Engine and supported by an advanced **Flask** backend, the software autonomously identifies four critical classes: **Handgun, Knife, Rifle, and Shotgun**.
+This repository currently ships:
 
-Designed to mirror rigorous research paper specifications, AEGI operates intelligently across static images, historical video payloads, and live edge-deployed CCTV feeds.
+- `yolov8s.pt` as the primary general YOLO model
+- `weapon_model.pt` as an auxiliary Hugging Face checkpoint when present
+- `yolov8n.pt` for scene-aware person detection
 
-## 🎯 Unparalleled Capabilities
-The platform boasts a massive array of features to power its surveillance ecosystem:
+This repository does not currently ship:
 
-### 📺 Multi-Modal Web Dashboard
-A visually stunning, futuristic UI (*Sentinel Alpha*) providing cross-functional analytics for:
-- **Live Feed Neural Tracking**: Real-time webcam processing using native MJPEG WebRTC streams.
-- **Image Pipeline**: Instant classification and bounding-box drawing for photo uploads.
-- **Video Threat Parsing**: Full, frame-by-frame autonomous threat detection looping for recorded videos.
+- a bundled custom training dataset
+- a validated custom-trained YOLOv8s checkpoint for 4 weapon classes
+- reproducible benchmark reports for `96.1%` accuracy or `mAP@50`
+- Jetson Nano plus TensorRT deployment artifacts
 
-### 🧠 Deep Edge Intelligence & Inference
-- **YOLOv8s Neural Engine**: Utilizes the balanced Small backbone (22MB) for optimal speed-accuracy tradeoff on consumer hardware.
-- **Neural Stride Protocol**: Intelligently balances processing load for ultra-smooth live tracking.
-- **Dynamic Edge Mode**: Actively throttles resolution and scales inference based on live hardware latency to maintain optimal FPS efficiency.
-- **CLAHE Pre-Processing**: Enhances low-light or washed-out feeds to squeeze out the highest confidence threshold available.
-- **H.264 On-the-fly Re-encoding**: Automatic `ffmpeg` injection standardizes all exported surveillance footage flawlessly for cross-browser playback.
+## What is working well
 
-### 📍 Interactive ROI (Region of Interest) Zones
-Eliminate alert fatigue by dynamically drawing polygonal, constrained inclusion zones right from the live UI payload. Outside regions are implicitly ignored.
+- Flask app structure and multi-page UI
+- image, video, and webcam inference flows
+- CLAHE preprocessing for dark frames
+- ROI polygon drawing and ROI-based gating
+- evidence logging and cooldown flow
+- dual-engine inference path with primary plus auxiliary model loading
 
-### 🛡️ Paper-Aligned Post-Processing Neural Logic
-All operations are bolstered by 9 robust processing checkpoints (`post_processing/`) designed to crush false positives:
-1. **Temporal Consistency Filtering**: Ensures smooth and continuous tracking.
-2. **Confidence Stabilization**: Destroys bounding box jitter and flickering.
-3. **Context-Aware Risk Scoring**: Scales threat level dynamically (Low, Medium, High).
-4. **Scene-Aware False Alarm Suppression**: Cancels logic overlap via parallel background tracking.
-5. **Smart ROI Monitoring**: Focused grid intelligence tracking.
-6. **Immutable Evidence Auto-Logging**: Exports threat records (base64 Image + JSON specs) locally strictly when danger is confirmed via Alert Cooldown processing.
-7. **Alert Cooldown Mechanism**: Caps warning flooding limits.
-8. **Adaptive Edge Deployment**: Resource-saving optimization protocol.
-9. **User Feedback Learning Loop**: Records forensic user intervention annotations.
+## Important limitations
 
----
+- Runtime detections are generated from the models bundled in the repo, not from a
+  documented custom training run.
+- Confidence values are raw model confidences and should not be presented as paper
+  accuracy metrics.
+- Post-processing modules are useful application heuristics, but the repo does not
+  include ablation studies or statistical proof for false-positive reduction claims.
+- Edge mode currently adjusts inference resolution only; TensorRT export/deployment
+  is not included.
 
-## 📊 Performance Matrix
-* **Detection Efficacy**: Tuned to hit **96.1% detection accuracy** using the research-standard backbone.
-* **Neural Confidence Calibration**: Actively guards against adversarial visual noise.
+## Quick start
 
----
+1. Create and activate a virtual environment.
+2. Install dependencies:
 
-## 🛠️ Quick Deployment
-
-### 1. Requirements
-- **Python** 3.10 – 3.13
-- **Git**
-- *FFmpeg (Optional but heavily recommended for high-tier browser video re-encoding)*
-
-### 2. Download Core
-```bash
-git clone https://github.com/rishu070707/Aegi.git
-cd Aegi
-```
-
-### 3. Initialize Isolated Environment
-**Windows:**
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-**Linux / macOS:**
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-### 4. Install Neural Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 5. Ignite the Pipeline
+3. Run the Flask app:
+
 ```bash
 python app.py
 ```
-> **Success:** The Sentinel Core connects at **[http://localhost:5000](http://localhost:5000)**. Enter the dashboard to track threats.
 
----
+4. Open [http://localhost:5000](http://localhost:5000)
 
-## 📂 Core Architecture Tree
-* 🧠 `yolov8s.pt` – Primary **Neural Synthesis Engine** (Sentinel-Core Small).
-* 🧠 `weapon_model.pt` – Specialized high-frequency weights targeting firearms.
-* 🧠 `yolov8n.pt` – Auxiliary Person-Detection model feeding the Scene-Aware Context logic.
-* ⚙️ `app.py` – Pulse of the Flask API ecosystem.
-* 🔍 `detector.py` – The main wrapper for Optimized Neural inference flow.
-* 📁 `post_processing/` – Home to all advanced filter protocols.
-* 📁 `evidence_logs/` – Immutable capture storage for trigger events.
-* 🎨 `templates/` – Contains `index.html` (Sentinel UI) and tracking elements.
+## Training utilities
 
-### 🏋️ Retraining Protocols
-Initiate custom cross-validated training folds matching the paper architecture:
-```bash
-python scripts/train_weapon_model.py --data path/to/dataset.yaml --weights yolov8s.pt --epochs 100 --imgsz 640 --batch 16
-```
+The `scripts/` folder contains helper utilities for:
+
+- merging user-supplied YOLO datasets into a unified 4-class dataset
+- running fine-tuning with Ultralytics YOLO on a user-supplied `data.yaml`
+
+These scripts are scaffolding only. They require your own dataset and do not prove
+any benchmark claim by themselves.

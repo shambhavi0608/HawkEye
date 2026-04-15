@@ -70,7 +70,7 @@
           SURVEILLANCE
         </h1>
         <p class="text-on-surface-variant max-w-lg leading-relaxed text-lg border-l-2 border-outline-variant/30 pl-6">
-          Next-generation real-time weapon detection and predictive threat analysis. Powered by dual YOLOv8 neural models for Handgun, Knife, Rifle and Shotgun recognition across live feeds and video archives.
+          Flask-based weapon detection demo with live feed, image upload, video processing, ROI monitoring, evidence logging, and low-light CLAHE preprocessing. Runtime model provenance is shown from the actual repo state.
         </p>
         <div class="flex flex-wrap gap-4 pt-4">
           <a href="/live" class="bg-gradient-to-br from-secondary to-secondary-container text-on-secondary-container px-8 py-4 font-headline font-bold text-sm tracking-widest uppercase rounded-sm flex items-center gap-3 hover:brightness-110 active:scale-95 transition-all shadow-[0_0_20px_rgba(78,222,163,0.3)]">
@@ -257,7 +257,7 @@ async function loadStatus(){
     document.getElementById('heroHudLatency').innerHTML=lat+'<span class="text-lg">MS</span>';
     document.getElementById('heroModel').textContent=d.model??'—';
     document.getElementById('heroMode').textContent=(d.edge_mode?.current_mode??'—').toUpperCase();
-    document.getElementById('heroStatus').textContent=d.model_is_custom?'WEAPON MODEL: ACTIVE':'COCO MODEL: ACTIVE';
+    document.getElementById('heroStatus').textContent=d.model_status??'RUNTIME STATUS UNKNOWN';
     const now=new Date();
     const ts=now.toTimeString().slice(0,8);
     ['t1','t2','t3','t4'].forEach(id=>document.getElementById(id).textContent=ts);

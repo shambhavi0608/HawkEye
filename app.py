@@ -1,7 +1,13 @@
 """
-app.py — Flask Application for Real-Time Multi-Class Weapon Detection System
-Full pipeline: CLAHE → YOLOv8s → Temporal Filter → EMA → Scene Filter →
-              ROI Check → Risk Score → Cooldown → Evidence Log → Stream
+app.py -- Flask application for the shipped weapon detection demo
+
+Runtime pipeline:
+CLAHE -> detector inference -> temporal filter -> confidence stabilizer ->
+scene filter -> ROI gate -> risk scoring -> cooldown -> evidence logging.
+
+This app exposes the runtime exactly as present in the repository; it does not
+imply that a custom-trained model, bundled dataset, or paper-grade validation
+artifacts are available locally.
 """
 
 import os
@@ -91,6 +97,8 @@ def _run_full_pipeline(
     bypass_scene=False,
     bypass_ema=False,
     inference_imgsz: int | None = None,
+    source_mode: str = "live",
+    force_log: bool = False,
 ) -> tuple:
     """
     Execute the full detection pipeline on a single frame.
@@ -133,6 +141,7 @@ def _run_full_pipeline(
         risk_result = risk_scorer.score(det, frame.shape, in_roi=in_roi)
         det.update(risk_result)
         det["in_roi"] = in_roi
+        det["source_mode"] = source_mode
 
         # 6. Alert Cooldown + Evidence Log
         region_key = "roi" if in_roi else "global"
@@ -140,12 +149,25 @@ def _run_full_pipeline(
         det["detection_id"] = det_id
         feedback.register_detection(det_id, det)
 
-        do_alert = cooldown.should_alert(det["class_name"], region_key)
+        do_alert = force_log or cooldown.should_alert(det["class_name"], region_key)
         det["alerted"] = do_alert
 
-        if do_alert and det["risk_level"] in ("High", "Medium"):
+        should_log = force_log or (do_alert and det["risk_level"] in ("High", "Medium"))
+        if should_log:
             ann = detector.draw_detections(frame, [det])
-            ev_logger.log(ann, det, risk_result, SESSION_ID, roi_zone=roi_monitor.get_roi())
+            log_file = ev_logger.log(
+                ann,
+                det,
+                risk_result,
+                SESSION_ID,
+                roi_zone=roi_monitor.get_roi(),
+                source_mode=source_mode,
+            )
+            det["log_file"] = log_file
+            det["logged"] = bool(log_file)
+        else:
+            det["log_file"] = None
+            det["logged"] = False
 
         annotated_dets.append(det)
 
@@ -206,7 +228,11 @@ def inference_thread_fn():
                 frame_copy = latest_frame.copy()
         if frame_copy is not None:
             try:
-                _, dets, _ = _run_full_pipeline(frame_copy, temp_filter=local_temporal)
+                _, dets, _ = _run_full_pipeline(
+                    frame_copy,
+                    temp_filter=local_temporal,
+                    source_mode="live",
+                )
                 with stream_lock:
                     latest_boxes = copy.deepcopy(dets)
             except Exception as e:
@@ -270,7 +296,7 @@ def index():
 
 @app.route("/live")
 def live_page():
-    return render_template("live.html", active="live")
+    return render_template("live.html", active="live", session_id=SESSION_ID)
 
 
 @app.route("/camera")
@@ -321,6 +347,8 @@ def detect_image():
             bypass_scene=True,
             bypass_ema=True,
             inference_imgsz=640,
+            source_mode="image",
+            force_log=True,
         )
 
         # Encode annotated image to base64
@@ -339,6 +367,9 @@ def detect_image():
                 "risk_level":    d.get("risk_level", "Low"),
                 "in_roi":        bool(d.get("in_roi", False)),
                 "detection_id":  d.get("detection_id", ""),
+                "logged":        bool(d.get("logged", False)),
+                "log_file":      d.get("log_file"),
+                "source_mode":   d.get("source_mode", "image"),
             })
 
         return jsonify({
@@ -346,6 +377,7 @@ def detect_image():
             "detections": clean_dets,
             "latency_ms": round(latency, 2),
             "total": len(clean_dets),
+            "logs_created": sum(1 for d in clean_dets if d.get("logged")),
         })
 
     except Exception as e:
@@ -449,6 +481,7 @@ def detect_video():
                 temp_filter=local_temporal,
                 bypass_scene=True,
                 inference_imgsz=640,
+                source_mode="video",
             )
             out.write(annotated)
             for d in dets:
@@ -554,13 +587,22 @@ def set_roi():
     data = request.get_json(force=True, silent=True) or {}
     zones = data.get("zones", [])
     roi_monitor.set_roi(zones)
-    return jsonify({"status": "ok", "zones_set": len(zones)})
+    clean_zones = roi_monitor.get_roi()
+    return jsonify({"status": "ok", "zones_set": len(clean_zones), "zones": clean_zones})
 
 
 @app.route("/clear_roi", methods=["POST"])
 def clear_roi():
     roi_monitor.clear_roi()
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/roi")
+def api_roi():
+    return jsonify({
+        "zones": roi_monitor.get_roi(),
+        "count": len(roi_monitor.get_roi()),
+    })
 
 
 @app.route("/evidence")
@@ -580,25 +622,31 @@ def serve_evidence(filename):
 
 @app.route("/api/status")
 def api_status():
-    """Return current system status metrics aligned with paper claims."""
+    """Return current runtime status for the UI."""
     with stream_lock:
         boxes = copy.deepcopy(latest_boxes)
     stats = edge_mgr.get_stats()
-    
-    # Map the filename to a research-aligned name
-    m_path = detector.model_path.lower()
-    if "s.pt" in m_path:
-        display_model = "YOLOv8s Sentinel-Core"
-    elif "l.pt" in m_path:
-        display_model = "YOLOv8L Neural Synthesis (SOTA)"
+    primary_model = os.path.basename(detector.model_path)
+    aux_model = os.path.basename(detector.aux_path) if getattr(detector, "aux_model", None) else None
+    if aux_model:
+        display_model = f"{primary_model} + {aux_model}"
+        model_status = "GENERAL + HF AUX ACTIVE"
     else:
-        display_model = "YOLOv8 Sentinel (HF-Nano)"
+        display_model = primary_model
+        model_status = "GENERAL MODEL ACTIVE"
     
     return jsonify({
         "demo_mode":        False,
         "model":            display_model,
-        "model_is_custom":  True,
-        "accuracy_claim":   "96.1% mAP@50 (5-Fold CV + Custom Dataset)",
+        "model_is_custom":  False,
+        "model_status":     model_status,
+        "model_provenance": {
+            "primary": primary_model,
+            "auxiliary": aux_model,
+            "bundled_dataset": False,
+            "bundled_training_artifacts": False,
+        },
+        "accuracy_claim":   None,
         "session_id":       SESSION_ID,
         "webcam_active":    webcam_active,
         "cam_error":        cam_error,
@@ -617,9 +665,14 @@ def live_detections():
     for d in boxes:
         clean.append({
             "class_name":   d.get("class_name"),
+            "model_class":  d.get("coco_name"),
             "confidence":   round(float(d.get("confidence", 0)), 3),
             "risk_level":   d.get("risk_level", "Low"),
             "risk_score":   round(float(d.get("risk_score", 0)), 3),
+            "alerted":      bool(d.get("alerted", False)),
+            "in_roi":       bool(d.get("in_roi", False)),
+            "logged":       bool(d.get("logged", False)),
+            "source_mode":  d.get("source_mode", "live"),
             "detection_id": d.get("detection_id", ""),
         })
     return jsonify(clean)

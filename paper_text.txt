@@ -1,3 +1,10 @@
+Repository note: the manuscript text below contains research-style claims that are not fully reproducible from the files bundled in this repository. The current codebase ships a Flask demo with CLAHE, ROI, evidence logging, and heuristic post-processing, but it does not include the claimed custom 25k-image dataset, a validated custom-trained YOLOv8s checkpoint, or benchmark evidence for 96.1% mAP@50 / TensorRT deployment.
+
+Suggested correction summary for this repo version:
+- Model provenance should be described as `yolov8s.pt` plus optional auxiliary `weapon_model.pt` from Hugging Face.
+- Accuracy should be reported as unvalidated in-repo unless a real evaluation report is added.
+- Post-processing should be described as implemented heuristics with partial validation, not as fully proven reductions.
+
 Real-Time Multi-Class Weapon Detection System Using YOLOv8 with Flask-Based Multi-Modal Deployment and Advanced Post-Processing Modules
 
 

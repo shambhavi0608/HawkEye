@@ -6,8 +6,9 @@ Checks if detection bbox centroid falls inside any ROI polygon.
 Elevates Ps score for in-ROI detections.
 """
 
+import copy
 import numpy as np
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 
 class ROIMonitor:
@@ -30,11 +31,26 @@ class ROIMonitor:
             Each polygon is a list of [x, y] points in normalized [0,1] coordinates.
             Example: [[[0.1, 0.1], [0.4, 0.1], [0.4, 0.4], [0.1, 0.4]]]
         """
-        self._roi_zones = zones if zones else []
+        normalized = []
+        for zone in zones or []:
+            clean_zone = []
+            for point in zone:
+                if not isinstance(point, (list, tuple)) or len(point) != 2:
+                    continue
+                try:
+                    x = min(1.0, max(0.0, float(point[0])))
+                    y = min(1.0, max(0.0, float(point[1])))
+                except (TypeError, ValueError):
+                    continue
+                clean_zone.append([round(x, 6), round(y, 6)])
+            if len(clean_zone) >= 3:
+                normalized.append(clean_zone)
+
+        self._roi_zones = normalized
 
     def get_roi(self) -> List[List[List[float]]]:
         """Return current ROI zones."""
-        return self._roi_zones
+        return copy.deepcopy(self._roi_zones)
 
     def clear_roi(self):
         """Remove all ROI zones."""
