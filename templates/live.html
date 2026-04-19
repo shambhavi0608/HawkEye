@@ -41,14 +41,14 @@
       </div>
 
       <!-- Control Bar -->
-      <div class="absolute bottom-6 left-1/2 z-20 -translate-x-1/2 flex items-center gap-4 px-6 py-2 bg-slate-950/60 backdrop-blur-md rounded-full border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
+      <div id="controlBar" class="absolute bottom-6 left-1/2 z-[100] -translate-x-1/2 flex items-center gap-4 px-6 py-2 bg-slate-950/80 backdrop-blur-md rounded-full border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
         <button id="toggleStream" class="flex items-center gap-2 text-emerald-400 hover:text-emerald-300 transition-colors">
           <span class="material-symbols-outlined text-3xl" id="toggleIcon">play_circle</span>
         </button>
         <div class="h-4 w-px bg-white/10"></div>
-        <button id="toggleROI" class="text-xs font-mono font-bold tracking-widest text-emerald-400/70 hover:text-emerald-400 relative z-50 cursor-pointer pointer-events-auto">DRAW_ROI</button>
+        <button id="toggleROI" class="text-xs font-mono font-bold tracking-widest text-emerald-400/70 hover:text-emerald-400 relative z-[110] cursor-pointer pointer-events-auto">DRAW_ROI</button>
         <div class="h-4 w-px bg-white/10"></div>
-        <button id="clearROI" class="text-xs font-mono font-bold tracking-widest text-error/70 hover:text-error">CLEAR_ROI</button>
+        <button id="clearROI" class="text-xs font-mono font-bold tracking-widest text-error/70 hover:text-error relative z-[110]">CLEAR_ROI</button>
       </div>
       <div id="roiHint" class="absolute top-20 left-1/2 z-20 -translate-x-1/2 bg-black/60 px-3 py-1 text-[10px] text-emerald-400 border border-emerald-500/20 rounded-full font-mono hidden">CLICK INSIDE FEED TO DRAW ROI</div>
     </div>

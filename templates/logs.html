@@ -19,7 +19,7 @@
   </div>
 
   <!-- STATS -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
 
     <div class="bg-[#0e1520] p-4 border border-white/5 rounded-lg">
       <p class="text-xs text-slate-400">TOTAL LOGS</p>
@@ -32,13 +32,8 @@
     </div>
 
     <div class="bg-[#0e1520] p-4 border border-white/5 rounded-lg">
-      <p class="text-xs text-slate-400">ACCURACY</p>
-      <h2 class="text-3xl text-cyan-400 font-bold">98%</h2>
-    </div>
-
-    <div class="bg-[#0e1520] p-4 border border-white/5 rounded-lg">
-      <p class="text-xs text-slate-400">LATENCY</p>
-      <h2 class="text-3xl text-amber-400 font-bold">14ms</h2>
+      <p class="text-xs text-slate-400">NODE LATENCY</p>
+      <h2 class="text-3xl text-amber-400 font-bold" id="metricLatency">--<span class="text-xs">ms</span></h2>
     </div>
 
   </div>
@@ -140,6 +135,21 @@
     }
   }
 
+  async function syncStatus() {
+    try {
+      const res = await fetch('/api/status');
+      const d = await res.json();
+      const latency = d.edge_mode?.avg_latency_ms ?? '—';
+      const accurate = d.model_is_custom ? '96.1%' : (d.accuracy_claim || 'N/A');
+      
+      const latLabel = document.getElementById('metricLatency');
+      if (latLabel) latLabel.innerHTML = latency + '<span class="text-xs">ms</span>';
+      
+      const accLabel = document.getElementById('metricAccuracy');
+      if (accLabel) accLabel.textContent = accurate;
+    } catch(e) {}
+  }
+
   // FILTERS
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -153,6 +163,8 @@
   document.getElementById('refreshLogs').addEventListener('click', loadLogs);
 
   loadLogs();
+  syncStatus();
+  setInterval(syncStatus, 5000);
 </script>
 
 <style>

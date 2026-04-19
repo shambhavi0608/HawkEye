@@ -117,6 +117,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
 <script>
 (function () {
   const VIDEO_EXT = /\.(mp4|webm|mkv|avi|mov|m4v|wmv|mpeg|mpg|3gp|ogv)$/i;
@@ -307,6 +308,11 @@
           '</div>',
           Boolean(data.total_detections)
         );
+
+        if (data.total_detections > 0 && typeof Sentinel !== 'undefined') {
+          Sentinel.addNotification({ class_name: 'VIDEO_THREAT', risk_level: 'High', confidence: 0.9, in_roi: false });
+          Sentinel.playAlertSound('High');
+        }
       } catch (e) {
         console.error(e);
         document.getElementById('metricConfDelta').textContent = 'Network error';
@@ -386,6 +392,13 @@
           '</div>';
 
         setScanSummary(summaryHeader + findings, Boolean(data.logs_created));
+
+        if (data.detections && data.detections.length > 0 && typeof Sentinel !== 'undefined') {
+          data.detections.forEach(d => {
+            Sentinel.addNotification(d);
+            Sentinel.playAlertSound(d.risk_level);
+          });
+        }
       }
     } catch (e) {
       console.error(e);

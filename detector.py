@@ -307,9 +307,10 @@ class WeaponDetector:
 
         for det in all_detections:
             det.setdefault("risk_score", round(float(det.get("confidence", 0.0)), 4))
+            r = det["risk_score"]
             det.setdefault(
                 "risk_level",
-                "High" if det["risk_score"] >= 0.75 else "Medium" if det["risk_score"] >= 0.45 else "Low",
+                "High" if r >= 0.60 else "Medium" if r >= 0.40 else "Low",
             )
 
         latency = (time.perf_counter() - t0) * 1000.0

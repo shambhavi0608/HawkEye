@@ -71,7 +71,7 @@ class RiskScorer:
     @staticmethod
     def get_risk_level(risk_score: float) -> str:
         """Convert numeric risk score to categorical risk level."""
-        if risk_score >= 0.70:
+        if risk_score >= 0.60:
             return "High"
         elif risk_score >= 0.40:
             return "Medium"

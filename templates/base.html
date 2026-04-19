@@ -61,7 +61,26 @@
     </nav>
   </div>
   <div class="flex items-center gap-3">
-    <span class="material-symbols-outlined text-slate-400 hover:text-emerald-400 cursor-pointer transition-colors p-2">notifications_active</span>
+    <div class="relative group" id="notificationHub">
+      <button class="flex items-center justify-center p-2 text-slate-400 hover:text-emerald-400 transition-colors relative">
+        <span class="material-symbols-outlined">notifications_active</span>
+        <span id="navAlertCount" class="absolute top-1 right-1 w-4 h-4 bg-red-500 text-[9px] font-bold text-white flex items-center justify-center rounded-full hidden">0</span>
+      </button>
+      
+      <!-- Notification Dropdown -->
+      <div id="navNotificationDropdown" class="absolute right-0 mt-2 w-80 bg-slate-900 border border-white/10 rounded-sm shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-[60] overflow-hidden">
+        <div class="px-4 py-3 border-b border-white/5 bg-slate-950 flex justify-between items-center">
+          <span class="text-[10px] font-headline font-black tracking-widest uppercase">Recent Alerts</span>
+          <button id="clearNavAlerts" class="text-[9px] font-mono text-slate-500 hover:text-emerald-400 uppercase tracking-widest">Clear</button>
+        </div>
+        <div id="navNotificationList" class="max-h-96 overflow-y-auto p-2 space-y-2">
+          <p class="text-[10px] text-center text-slate-600 font-mono py-8">NO_ACTIVE_ALERTS</p>
+        </div>
+        <div class="px-4 py-2 border-t border-white/5 bg-slate-950/50">
+          <a href="/logs" class="block text-center text-[9px] font-mono text-emerald-500/70 hover:text-emerald-500 uppercase tracking-widest py-1">View All Archives</a>
+        </div>
+      </div>
+    </div>
     <span class="material-symbols-outlined text-slate-400 hover:text-emerald-400 cursor-pointer transition-colors p-2">settings</span>
     <span class="material-symbols-outlined text-slate-400 hover:text-emerald-400 cursor-pointer transition-colors p-2">terminal</span>
     <div class="w-8 h-8 rounded-sm bg-surface-container-highest border border-emerald-500/30 flex items-center justify-center">
@@ -142,6 +161,39 @@ async function updateStatusBar(){
   }catch{}
 }
 setInterval(updateStatusBar,4000); updateStatusBar();
+
+// Sync Notification Hub on non-live pages
+if (!window.location.pathname.includes('/live')) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const list = document.getElementById('navNotificationList');
+    const badge = document.getElementById('navAlertCount');
+    const data = JSON.parse(localStorage.getItem('sentinel_notifications') || '[]');
+    if (list && badge && data.length > 0) {
+      badge.textContent = data.length;
+      badge.classList.remove('hidden');
+      list.innerHTML = data.map(n => {
+        const color = n.risk_level === 'High' ? 'text-red-400' : n.risk_level === 'Medium' ? 'text-amber-400' : 'text-emerald-400';
+        const bg = n.risk_level === 'High' ? 'bg-red-500/5' : n.risk_level === 'Medium' ? 'bg-amber-500/5' : 'bg-emerald-500/5';
+        return `
+          <div class="p-3 ${bg} border border-white/5 rounded-sm flex flex-col gap-1">
+            <div class="flex justify-between items-center">
+              <span class="text-[11px] font-headline font-bold uppercase ${color}">${n.class_name}</span>
+              <span class="text-[9px] font-mono text-slate-500 uppercase">${n.timestamp}</span>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    const clearBtn = document.getElementById('clearNavAlerts');
+    if (clearBtn) {
+      clearBtn.onclick = () => {
+        localStorage.removeItem('sentinel_notifications');
+        if (badge) badge.classList.add('hidden');
+        if (list) list.innerHTML = '<p class="text-[10px] text-center text-slate-600 font-mono py-8">NO_ACTIVE_ALERTS</p>';
+      };
+    }
+  });
+}
 </script>
 {% block scripts %}{% endblock %}
 </body>

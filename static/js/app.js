@@ -10,6 +10,9 @@ const Sentinel = {
   alertCooldownMs: 8000,
   alertHistory: new Map(),
   lastKnownRoiCount: 0,
+  notifications: JSON.parse(localStorage.getItem('sentinel_notifications') || '[]'),
+  audioEnabled: localStorage.getItem('sentinel_audio') === 'true',
+  audioCtx: null,
 
   async pollStatus() {
     try {
@@ -133,7 +136,77 @@ const Sentinel = {
       .forEach(det => {
         this.showDetectionToast(det);
         this.sendDesktopNotification(det);
+        this.addNotification(det);
+        this.playAlertSound(det.risk_level);
       });
+  },
+
+  addNotification(det) {
+    const entry = {
+      id: Date.now() + Math.random(),
+      class_name: det.class_name,
+      risk_level: det.risk_level,
+      timestamp: new Date().toLocaleTimeString(),
+      in_roi: det.in_roi,
+      confidence: det.confidence
+    };
+    this.notifications.unshift(entry);
+    if (this.notifications.length > 15) this.notifications.pop();
+    localStorage.setItem('sentinel_notifications', JSON.stringify(this.notifications));
+    this.updateNotificationHub();
+  },
+
+  updateNotificationHub() {
+    const list = document.getElementById('navNotificationList');
+    const badge = document.getElementById('navAlertCount');
+    if (!list || !badge) return;
+
+    if (this.notifications.length === 0) {
+      list.innerHTML = '<p class="text-[10px] text-center text-slate-600 font-mono py-8">NO_ACTIVE_ALERTS</p>';
+      badge.classList.add('hidden');
+      return;
+    }
+
+    badge.textContent = this.notifications.length;
+    badge.classList.remove('hidden');
+
+    list.innerHTML = this.notifications.map(n => {
+      const color = n.risk_level === 'High' ? 'text-red-400' : n.risk_level === 'Medium' ? 'text-amber-400' : 'text-emerald-400';
+      const bg = n.risk_level === 'High' ? 'bg-red-500/5' : n.risk_level === 'Medium' ? 'bg-amber-500/5' : 'bg-emerald-500/5';
+      return `
+        <div class="p-3 ${bg} border border-white/5 rounded-sm flex flex-col gap-1">
+          <div class="flex justify-between items-center">
+            <span class="text-[11px] font-headline font-bold uppercase ${color}">${n.class_name}</span>
+            <span class="text-[9px] font-mono text-slate-500 uppercase">${n.timestamp}</span>
+          </div>
+          <p class="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+            ${n.risk_level} RISK • ${(n.confidence*100).toFixed(0)}% • ${n.in_roi ? 'SECURE_ZONE' : 'PERIMETER'}
+          </p>
+        </div>
+      `;
+    }).join('');
+  },
+
+  playAlertSound(level) {
+    if (!this.audioEnabled) return;
+    try {
+      if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = this.audioCtx.createOscillator();
+      const gain = this.audioCtx.createGain();
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(level === 'High' ? 880 : 440, this.audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(110, this.audioCtx.currentTime + 0.5);
+      
+      gain.gain.setValueAtTime(0.1, this.audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, this.audioCtx.currentTime + 0.5);
+      
+      osc.connect(gain);
+      gain.connect(this.audioCtx.destination);
+      
+      osc.start();
+      osc.stop(this.audioCtx.currentTime + 0.5);
+    } catch(e) {}
   },
 
   showDetectionToast(det) {
@@ -499,6 +572,7 @@ const Sentinel = {
     const canvas = document.getElementById('roiCanvas');
     const hint = document.getElementById('roiHint');
     const btn = document.getElementById('toggleROI');
+    const bar = document.getElementById('controlBar');
     if (!canvas || !hint || !btn) return;
     
     if (this.roiDrawing) {
@@ -507,6 +581,7 @@ const Sentinel = {
       hint.classList.remove('hidden');
       btn.textContent = 'SEAL_ZONE';
       btn.classList.add('text-yellow-400');
+      if (bar) bar.classList.replace('opacity-0', 'opacity-100');
       this.drawROIZones();
     } else {
       if (this.roiPoints.length > 0) this.sealROIZone();
@@ -515,6 +590,7 @@ const Sentinel = {
       hint.classList.add('hidden');
       btn.textContent = 'DRAW_ROI';
       btn.classList.remove('text-yellow-400');
+      if (bar) bar.classList.replace('opacity-100', 'opacity-0');
     }
     this.updateROIIndicators();
   },
@@ -534,18 +610,43 @@ const Sentinel = {
     this.pollStatus();
     this.updateNotificationBadge();
     this.loadROI();
+    this.updateNotificationHub();
+
+    // Wire up Navbar
+    const clearBtn = document.getElementById('clearNavAlerts');
+    if (clearBtn) {
+      clearBtn.onclick = () => {
+        this.notifications = [];
+        localStorage.removeItem('sentinel_notifications');
+        this.updateNotificationHub();
+      };
+    }
+
+    const settingsBtn = document.querySelector('.material-symbols-outlined:nth-child(2)'); // Settings icon
+    if (settingsBtn) {
+      const updateSettingsUI = () => {
+        settingsBtn.textContent = this.audioEnabled ? 'volume_up' : 'volume_off';
+        settingsBtn.classList.toggle('text-emerald-400', this.audioEnabled);
+      };
+      updateSettingsUI();
+      settingsBtn.onclick = () => {
+        this.audioEnabled = !this.audioEnabled;
+        localStorage.setItem('sentinel_audio', this.audioEnabled);
+        updateSettingsUI();
+        if (this.audioEnabled && !this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      };
+    }
 
     // Wire up Live page
     const toggleBtn = document.getElementById('toggleStream');
     if (toggleBtn) toggleBtn.onclick = () => this.toggleStream();
-
-    const clearBtn = document.getElementById('clearROI');
-    if (clearBtn) clearBtn.onclick = () => this.clearROI();
-
+    const clearROIBtn = document.getElementById('clearROI');
+    if (clearROIBtn) clearROIBtn.onclick = () => this.clearROI();
     const roiBtn = document.getElementById('toggleROI');
     if (roiBtn) roiBtn.onclick = () => this.toggleROIDrawing();
 
     this.setupROI();
+    this.updateStatusBadge();
   }
 };
 
