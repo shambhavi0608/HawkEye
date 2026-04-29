@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-04-29T05:55:21.583737+00:00",
+  "class": "Knife",
+  "class_name": "Knife",
+  "classification": "Knife",
+  "model_class": "knife",
+  "confidence": 0.7458,
+  "bbox": [
+    869,
+    344,
+    1041,
+    516
+  ],
+  "risk_score": 0.5112,
+  "risk_level": "Medium",
+  "risk_components": {
+    "confidence": 0.7458,
+    "area": 0.0321,
+    "spatial_priority": 1.0,
+    "class_severity": 0.65
+  },
+  "detection_id": "Knife_f6e37804_1777442121582",
+  "source_mode": "video",
+  "in_roi": false,
+  "roi_zone": [],
+  "session_id": "f6e37804",
+  "frame_file": "alert_2026_04_29_05_55_21_Knife_Medium.png"
+}

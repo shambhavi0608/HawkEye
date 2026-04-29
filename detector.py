@@ -138,38 +138,69 @@ class WeaponDetector:
 
     def _preprocess(self, frame: np.ndarray) -> np.ndarray:
         """
-        Improved low-light enhancement using adaptive CLAHE and Gamma correction.
+        Multi-stage adaptive low-light enhancement using CLAHE + Gamma + denoising.
+
+        Luminance tiers (avg_brightness = mean(L) / 255):
+          < 0.10  -> severe darkness:  high-gain CLAHE (clip=4.0) + strong gamma (0.55) + denoise
+          < 0.30  -> dim lighting:     medium CLAHE (clip=3.0) + gamma (0.72) + denoise
+          < 0.50  -> sub-optimal:      mild CLAHE (clip=2.0) + gamma (0.88)
+          >= 0.50 -> normal:           no preprocessing (pass-through)
+
+        This ensures detection in challenging dim / partial-occlusion scenarios where
+        weapons appear small and dark (e.g. CCTV corridors at night).
         """
-        # Convert to LAB to isolate luminance
         lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
         l, a, b = cv2.split(lab)
-        
         avg_brightness = np.mean(l) / 255.0
-        
-        # If the frame is extremely dark (less than 15% luminance)
-        if avg_brightness < 0.15:
-            # Apply CLAHE to luminance channel
-            l_enhanced = self._clahe.apply(l)
-            
-            # Apply Gamma correction for better detail retrieval (gamma < 1 to brighten)
-            # Dynamic gamma based on darkness
-            gamma = 0.7 if avg_brightness < 0.2 else 0.85
+
+        if avg_brightness < 0.10:
+            # Tier 1 — Severe darkness: aggressive enhancement
+            clahe_strong = cv2.createCLAHE(clipLimit=4.0, tileGridSize=(8, 8))
+            l_enhanced = clahe_strong.apply(l)
+            gamma = 0.55
             inv_gamma = 1.0 / gamma
-            table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in range(256)]).astype("uint8")
+            table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(256)]).astype("uint8")
             l_enhanced = cv2.LUT(l_enhanced, table)
-            
-            # Remerge and convert back
             lab = cv2.merge((l_enhanced, a, b))
             frame = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-            
-            # Optional: Subtle bilateral filter to reduce noise in dark regions
-            if avg_brightness < 0.2:
-                frame = cv2.bilateralFilter(frame, 5, 30, 30)
-                
+            # Bilateral filter: reduces noise introduced by heavy amplification
+            frame = cv2.bilateralFilter(frame, 7, 50, 50)
+
+        elif avg_brightness < 0.30:
+            # Tier 2 — Dim lighting (common indoor CCTV conditions)
+            clahe_med = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+            l_enhanced = clahe_med.apply(l)
+            gamma = 0.72
+            inv_gamma = 1.0 / gamma
+            table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(256)]).astype("uint8")
+            l_enhanced = cv2.LUT(l_enhanced, table)
+            lab = cv2.merge((l_enhanced, a, b))
+            frame = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+            frame = cv2.bilateralFilter(frame, 5, 35, 35)
+
+        elif avg_brightness < 0.50:
+            # Tier 3 — Sub-optimal illumination: mild enhancement only
+            l_enhanced = self._clahe.apply(l)  # clip=2.0 default
+            gamma = 0.88
+            inv_gamma = 1.0 / gamma
+            table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(256)]).astype("uint8")
+            l_enhanced = cv2.LUT(l_enhanced, table)
+            lab = cv2.merge((l_enhanced, a, b))
+            frame = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+        # Tier 4 (avg_brightness >= 0.50): pass-through — no degradation on normal frames
         return frame
 
     @staticmethod
     def _valid_weapon_box(bbox, frame_shape, cls_name: str) -> bool:
+        """
+        Validate detected bounding box dimensions.
+
+        Occlusion note: partially occluded weapons can appear as very small
+        boxes (as little as 0.02% of frame area when only the grip/tip is
+        visible). The minimum area threshold is set low to preserve these
+        partial detections while still excluding sub-pixel noise.
+        """
         x1, y1, x2, y2 = bbox
         bw = x2 - x1
         bh = y2 - y1
@@ -178,21 +209,27 @@ class WeaponDetector:
         h, w = frame_shape[:2]
         area_pct = (bw * bh) / (w * h) * 100.0
 
-        # Global sanity check: exclude small noise or near-full-screen detections
-        if area_pct < 0.05 or area_pct > 85.0:
+        # Minimum: 0.02% — allows partial occlusion where only a small portion
+        # of the weapon is visible (e.g. grip protruding from behind a door).
+        # Maximum: 85% — rejects whole-frame background matches.
+        if area_pct < 0.02 or area_pct > 85.0:
             return False
 
         aspect = bw / (bh + 1e-6)
 
         if cls_name == "Knife":
-            # Knives are typically elongated.
-            if aspect > 10.0 or aspect < 0.1:
-                return True 
-            if 0.6 < aspect < 1.6:
-                if area_pct > 15.0: return False
-                
+            # Knives are elongated; accept wide aspect ratios.
+            # In occlusion: a partially hidden knife can appear nearly square.
+            if aspect > 12.0 or aspect < 0.08:
+                return True
+            if 0.5 < aspect < 1.8:
+                if area_pct > 15.0:
+                    return False
+
         if cls_name in {"Handgun", "Gun", "Rifle", "Shotgun"}:
-            if aspect > 12.0 or aspect < 0.05:
+            # Relaxed upper bound (was 12.0) to tolerate occluded barrels.
+            # Relaxed lower bound (was 0.05) for near-vertical grip-only views.
+            if aspect > 14.0 or aspect < 0.04:
                 return False
 
         return True

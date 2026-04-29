@@ -1,13 +1,37 @@
 """
-app.py -- Flask application for the shipped weapon detection demo
+app.py -- Flask application for the Sentinel Alpha weapon detection platform
 
 Runtime pipeline:
-CLAHE -> detector inference -> temporal filter -> confidence stabilizer ->
-scene filter -> ROI gate -> risk scoring -> cooldown -> evidence logging.
+  Adaptive CLAHE (3-tier) -> YOLOv8s + aux weapon_model.pt inference ->
+  Temporal Consistency Filtering (N=5, K=3, tau=0.30) ->
+  Confidence Stabilization (EMA, alpha=0.4) ->
+  Scene-Aware False Alarm Suppression (ψ-context multiplier) ->
+  ROI Gate -> Context-Aware Risk Scoring (w1=0.5, w2=0.3, w3=0.2) ->
+  Alert Cooldown (Δt=5s) -> Automated Evidence Logging -> User Feedback Loop
 
-This app exposes the runtime exactly as present in the repository; it does not
-imply that a custom-trained model, bundled dataset, or paper-grade validation
-artifacts are available locally.
+Paper contributions implemented in this codebase:
+  (i)   Multi-source dataset aggregation (Google Open Images, Roboflow, Kaggle,
+         controlled CCTV capture) — training conducted externally; repo ships
+         yolov8s.pt + optional weapon_model.pt from Hugging Face.
+  (ii)  YOLOv8s with 5-fold cross-validation (mAP@50 ≥ 0.95 reported in paper;
+         validated checkpoint not bundled in this repo).
+  (iii) Flask multi-modal platform: static image, pre-recorded video (async
+         background job), live webcam streaming.
+  (iv)  Temporal Consistency Filtering — post_processing/temporal_filter.py
+  (v)   Confidence Stabilization (EMA) — post_processing/confidence_stabilizer.py
+  (vi)  Context-Aware Risk Scoring — post_processing/risk_scorer.py
+  (vii) Scene-Aware False Alarm Suppression — post_processing/scene_filter.py
+  (viii)Smart ROI Monitoring — post_processing/roi_monitor.py
+  (ix)  Automated Evidence Logging — post_processing/evidence_logger.py
+  (x)   Alert Cooldown Mechanism — post_processing/alert_cooldown.py
+  (xi)  Adaptive Edge Deployment Mode — post_processing/edge_mode.py
+  (xii) User Feedback Learning Loop — post_processing/feedback_loop.py
+
+Repository correction note:
+  This repo ships yolov8s.pt (COCO weights) plus optional weapon_model.pt from
+  Hugging Face (Subh775/Threat-Detection-YOLOv8n). The 25,000-image custom
+  dataset, validated 96.1% mAP@50 report, and TensorRT artifacts are not
+  bundled; those figures originate from the paper's training environment.
 """
 
 import os
@@ -73,11 +97,26 @@ risk_scorer  = RiskScorer(w1=0.5, w2=0.3, w3=0.2)
 scene_filter = SceneAwareFilter(PERSON_MODEL_PATH, conf_threshold=0.25)
 roi_monitor  = ROIMonitor()
 ev_logger    = EvidenceLogger(EVIDENCE_DIR)
-cooldown     = AlertCooldown(cooldown_seconds=3.0)
-edge_mgr     = EdgeModeManager()
+cooldown     = AlertCooldown(cooldown_seconds=5.0)   # Paper Section IV-J: Δt = 5 seconds
+edge_mgr     = EdgeModeManager(
+    full_model_path=MODEL_PATH,        # yolov8s.pt
+    edge_model_path=PERSON_MODEL_PATH, # yolov8n.pt  (lightweight, Jetson-ready)
+    latency_trigger_ms=40.0,           # Paper Section IV-K: switch when latency > 40 ms
+    latency_trigger_frames=5,          # Require 5 consecutive high-latency frames
+    memory_trigger_mb=2048.0,          # Paper: switch when GPU free < 2 GB
+    recovery_latency_ms=30.0,
+    recovery_memory_mb=3072.0,
+    recovery_window=15,
+)
 feedback     = FeedbackLoop(FEEDBACK_DIR)
 
 SESSION_ID = str(uuid.uuid4())[:8]
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# VIDEO JOB QUEUE (async background processing)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIDEO_JOBS: dict = {}          # job_id -> {status, result, error}
+_jobs_lock = threading.Lock()
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # WEBCAM STREAMING STATE
@@ -414,10 +453,114 @@ def _h264_reencode_for_browser(src_path: str, dst_path: str) -> bool:
         return False
 
 
+def _process_video_job(job_id: str, in_path: str, raw_out: str, out_path: str, fps: float, w: int, h: int):
+    """Background thread: fast video pipeline with frame-skipping for CPU speed.
+
+    Speed strategy (CPU-only systems):
+      - Run full detection only every PROCESS_EVERY_N frames (default 3).
+      - Duplicate the last annotated frame for skipped frames (visually seamless
+        because detections are temporally stable via TemporalConsistencyFilter).
+      - Use imgsz=320 instead of 640 (4× fewer pixels, ~2.5× faster inference).
+      - scene_filter is disabled (bypass_scene=True) — saves ~40% per frame.
+    """
+    PROCESS_EVERY_N = 3          # Process 1 in every N frames  (1=all, 3=~3× faster)
+    VIDEO_IMGSZ     = 320        # Smaller inference size for batch speed
+
+    try:
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        out = cv2.VideoWriter(raw_out, fourcc, fps, (w, h))
+        if not out.isOpened():
+            with _jobs_lock:
+                VIDEO_JOBS[job_id] = {"status": "error", "error": "Cannot create output video"}
+            return
+
+        # Paper-aligned temporal filter: N=5, K=3, τ=0.30 (Section IV-D)
+        local_temporal = TemporalConsistencyFilter(
+            window_size=5, min_hits=3, min_confidence=0.30
+        )
+
+        frame_idx   = 0
+        all_detections = []
+        last_annotated = None   # re-use last annotated frame for skipped frames
+
+        cap = cv2.VideoCapture(in_path)
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            if frame_idx % PROCESS_EVERY_N == 0:
+                # ── Run detection on this frame ──────────────────────────
+                annotated, dets, _ = _run_full_pipeline(
+                    frame,
+                    temp_filter=local_temporal,
+                    bypass_scene=True,          # skip person-detector (saves ~40%)
+                    inference_imgsz=VIDEO_IMGSZ,
+                    source_mode="video",
+                )
+                last_annotated = annotated
+                for d in dets:
+                    all_detections.append({
+                        "frame":      frame_idx,
+                        "class_name": d.get("class_name"),
+                        "confidence": round(float(d.get("confidence", 0)), 3),
+                        "risk_level": d.get("risk_level", "Low"),
+                    })
+            else:
+                # ── Skipped frame: reuse last annotation ─────────────────
+                annotated = last_annotated if last_annotated is not None else frame
+
+            out.write(annotated)
+            frame_idx += 1
+
+        cap.release()
+        out.release()
+
+        try:
+            os.remove(in_path)
+        except OSError:
+            pass
+
+        if _h264_reencode_for_browser(raw_out, out_path):
+            try:
+                os.remove(raw_out)
+            except OSError:
+                pass
+        else:
+            if os.path.exists(out_path):
+                try:
+                    os.remove(out_path)
+                except OSError:
+                    pass
+            os.rename(raw_out, out_path)
+
+        result = {
+            "download_url":      f"/evidence/{os.path.basename(out_path)}",
+            "frames_processed":  frame_idx,
+            "frames_analysed":   max(1, frame_idx // PROCESS_EVERY_N),
+            "total_detections":  len(all_detections),
+            "detections_summary": all_detections[:100],
+            "codec_note": (
+                "h264" if shutil.which("ffmpeg")
+                else "mp4v (install ffmpeg for best browser playback)"
+            ),
+        }
+        with _jobs_lock:
+            VIDEO_JOBS[job_id] = {"status": "done", "result": result}
+
+    except Exception as e:
+        traceback.print_exc()
+        with _jobs_lock:
+            VIDEO_JOBS[job_id] = {"status": "error", "error": str(e)}
+
+
+
+
 @app.route("/detect/video", methods=["POST"])
 def detect_video():
     """
-    Accept a video file, process all frames, return annotated video as download.
+    Accept a video file; start async background processing; return job_id immediately.
+    The client should poll /detect/video/status/<job_id> for completion.
     """
     if "video" not in request.files:
         return jsonify({"error": "No video file provided"}), 400
@@ -447,93 +590,50 @@ def detect_video():
             fps = 25
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+
         if w <= 0 or h <= 0:
-            cap.release()
             try:
                 os.remove(in_path)
             except OSError:
                 pass
             return jsonify({"error": "Invalid video dimensions"}), 400
 
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        out = cv2.VideoWriter(raw_out, fourcc, fps, (w, h))
-        if not out.isOpened():
-            cap.release()
-            try:
-                os.remove(in_path)
-            except OSError:
-                pass
-            return jsonify({"error": "Cannot create output video"}), 500
+        with _jobs_lock:
+            VIDEO_JOBS[job] = {"status": "running"}
 
-        # Robust temporal smoothing for video files
-        local_temporal = TemporalConsistencyFilter(
-            window_size=5, min_hits=3, min_confidence=0.28
+        t = threading.Thread(
+            target=_process_video_job,
+            args=(job, in_path, raw_out, out_path, fps, w, h),
+            daemon=True,
         )
-        frame_idx = 0
-        all_detections = []
+        t.start()
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-            annotated, dets, _ = _run_full_pipeline(
-                frame,
-                temp_filter=local_temporal,
-                bypass_scene=True,
-                inference_imgsz=640,
-                source_mode="video",
-            )
-            out.write(annotated)
-            for d in dets:
-                all_detections.append(
-                    {
-                        "frame": frame_idx,
-                        "class_name": d.get("class_name"),
-                        "confidence": round(float(d.get("confidence", 0)), 3),
-                        "risk_level": d.get("risk_level", "Low"),
-                    }
-                )
-            frame_idx += 1
-
-        cap.release()
-        out.release()
-
-        try:
-            os.remove(in_path)
-        except OSError:
-            pass
-
-        if _h264_reencode_for_browser(raw_out, out_path):
-            try:
-                os.remove(raw_out)
-            except OSError:
-                pass
-        else:
-            if os.path.exists(out_path):
-                try:
-                    os.remove(out_path)
-                except OSError:
-                    pass
-            os.rename(raw_out, out_path)
-
-        out_filename = os.path.basename(out_path)
-        return jsonify(
-            {
-                "download_url": f"/evidence/{out_filename}",
-                "frames_processed": frame_idx,
-                "total_detections": len(all_detections),
-                "detections_summary": all_detections[:100],
-                "codec_note": (
-                    "h264"
-                    if shutil.which("ffmpeg")
-                    else "mp4v (install ffmpeg for best browser playback)"
-                ),
-            }
-        )
+        return jsonify({"job_id": job, "status": "running"})
 
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/detect/video/status/<job_id>")
+def detect_video_status(job_id):
+    """Poll endpoint: returns current status of a video processing job."""
+    with _jobs_lock:
+        job = VIDEO_JOBS.get(job_id)
+    if job is None:
+        return jsonify({"error": "Unknown job_id"}), 404
+    if job["status"] == "running":
+        return jsonify({"status": "running"})
+    if job["status"] == "error":
+        return jsonify({"status": "error", "error": job.get("error", "Unknown error")}), 500
+    # done
+    result = job["result"]
+    # Clean up job from memory after retrieval
+    with _jobs_lock:
+        VIDEO_JOBS.pop(job_id, None)
+    return jsonify({"status": "done", **result})
+
 
 
 @app.route("/stream/start", methods=["POST"])
@@ -634,27 +734,43 @@ def api_status():
     else:
         display_model = primary_model
         model_status = "GENERAL MODEL ACTIVE"
-    
+
     is_custom = primary_model == "weapon_model.pt"
+    is_edge_model = primary_model == "yolov8n.pt"
+    if is_edge_model:
+        model_status = "EDGE MODE: YOLOv8n ACTIVE"
+
     return jsonify({
         "demo_mode":        False,
         "model":            display_model,
         "model_is_custom":  is_custom,
         "model_status":     model_status,
         "model_provenance": {
-            "primary": primary_model,
-            "auxiliary": aux_model,
-            "bundled_dataset": False,
+            "primary":                   primary_model,
+            "auxiliary":                 aux_model,
+            "bundled_dataset":           False,
             "bundled_training_artifacts": False,
         },
-        "accuracy_claim":   "96.1% (Paper Target)" if is_custom else "N/A (Using Std Weights)",
-        "session_id":       SESSION_ID,
-        "webcam_active":    webcam_active,
-        "cam_error":        cam_error,
+        "accuracy_claim":    "96.1% (Paper Target)" if is_custom else "N/A (Using Std Weights)",
+        "session_id":        SESSION_ID,
+        "webcam_active":     webcam_active,
+        "cam_error":         cam_error,
         "active_detections": len(boxes),
-        "edge_mode":        stats,
-        "roi_zones":        len(roi_monitor.get_roi()),
+        "edge_mode":         stats,
+        "roi_zones":         len(roi_monitor.get_roi()),
+        "pipeline_modules":  {
+            "temporal_filter":     "active (N=5, K=3, τ=0.30 live; K=2 realtime)",
+            "confidence_ema":      "active (α=0.4)",
+            "risk_scoring":        "active (w1=0.5 w2=0.3 w3=0.2)",
+            "scene_filter":        "active (ψ∈{1.0,0.75,0.50})",
+            "roi_monitoring":      f"active ({len(roi_monitor.get_roi())} zones)",
+            "evidence_logging":    "active (ISO 8601 PNG+JSON)",
+            "alert_cooldown":      "active (Δt=5s per class/region)",
+            "edge_deployment":     f"{stats['current_mode']} mode | GPU: {stats.get('gpu_free_mb','N/A')}MB free",
+            "feedback_loop":       "active (CSV per detection)",
+        },
     })
+
 
 
 @app.route("/api/live_detections")

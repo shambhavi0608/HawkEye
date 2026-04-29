@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-04-29T05:55:47.008448+00:00",
+  "class": "Handgun",
+  "class_name": "Handgun",
+  "classification": "Handgun",
+  "model_class": "Gun",
+  "confidence": 0.7957,
+  "bbox": [
+    177,
+    338,
+    539,
+    558
+  ],
+  "risk_score": 0.591,
+  "risk_level": "Medium",
+  "risk_components": {
+    "confidence": 0.7957,
+    "area": 0.0864,
+    "spatial_priority": 1.0,
+    "class_severity": 0.85
+  },
+  "detection_id": "Handgun_f6e37804_1777442147006",
+  "source_mode": "video",
+  "in_roi": false,
+  "roi_zone": [],
+  "session_id": "f6e37804",
+  "frame_file": "alert_2026_04_29_05_55_47_Handgun_Medium.png"
+}

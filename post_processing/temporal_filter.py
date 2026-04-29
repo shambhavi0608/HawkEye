@@ -26,21 +26,32 @@ class TemporalConsistencyFilter:
     """
     Filters detections using a sliding-window temporal buffer.
 
+    Implements Section IV-D of the paper:
+    A detection event is confirmed and propagated downstream only when the
+    same object class appears with confidence τ >= 0.30 in at least K = 3
+    frames within the last N = 5 frames. This temporal consensus criterion
+    effectively suppresses single-frame spurious detections (caused by motion
+    blur, lighting transients, and partial occlusion) while introducing
+    negligible latency.
+
     Parameters
     ----------
     window_size : int
-        Number of recent frames to keep (N=5).
+        Number of recent frames to keep (paper: N=5).
     min_hits : int
-        Minimum frames a class must appear in to be confirmed (K=3).
+        Minimum frames a class must appear in to be confirmed (paper: K=3).
     min_confidence : float
-        Minimum confidence for a frame detection to count (0.30).
+        Minimum confidence for a frame detection to count (paper: τ=0.30).
+    min_iou : float
+        Minimum IoU overlap between current and past bbox to count as the
+        same object (not just same class in different location).
     """
 
     def __init__(
         self,
-        window_size: int = 3,
-        min_hits: int = 1,
-        min_confidence: float = 0.25,
+        window_size: int = 5,
+        min_hits: int = 3,
+        min_confidence: float = 0.30,
         min_iou: float = 0.15,
     ):
         self.window_size = window_size

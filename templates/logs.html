@@ -2,55 +2,160 @@
 
 {% block title %}EVIDENCE LOG | SENTINEL ALPHA{% endblock %}
 
+{% block head %}
+<style>
+  /* ═══════════════════════════════════════════════════════════
+     LOGS PAGE — plain CSS, loaded in <head> BEFORE Tailwind CDN
+     so specificity is not an issue. !important used on height/display
+     to guarantee Tailwind preflight cannot override.
+  ═══════════════════════════════════════════════════════════ */
+
+  #logsGrid {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: 340px !important;
+    gap: 20px;
+    overflow-y: auto !important;
+    max-height: calc(100vh - 290px);
+    padding: 0 6px 16px 0;
+    min-height: 0;
+    align-content: start;
+  }
+
+  /* Webkit scrollbar */
+  #logsGrid::-webkit-scrollbar        { width: 8px; }
+  #logsGrid::-webkit-scrollbar-track  { background: rgba(255,255,255,.04); border-radius: 4px; }
+  #logsGrid::-webkit-scrollbar-thumb  { background: rgba(34,211,238,.5); border-radius: 4px; }
+  #logsGrid::-webkit-scrollbar-thumb:hover { background: rgba(34,211,238,.8); }
+
+  /* Responsive */
+  @media (max-width: 1280px) { #logsGrid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width:  900px) { #logsGrid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width:  600px) { #logsGrid { grid-template-columns: 1fr; } }
+
+  /* Card */
+  .ev-card {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 340px !important;
+    min-height: 340px !important;
+    border-radius: 12px !important;
+    overflow: hidden !important;
+    background: #0e1520 !important;
+    box-sizing: border-box !important;
+    transition: box-shadow .2s, transform .2s;
+  }
+  .ev-card:hover {
+    box-shadow: 0 0 32px rgba(34,211,238,.14) !important;
+    transform: translateY(-3px);
+  }
+  .ev-card.High   { border: 2px solid rgba(239,68,68,.65) !important; }
+  .ev-card.Medium { border: 2px solid rgba(245,158,11,.65) !important; }
+  .ev-card.Low    { border: 2px solid rgba(52,211,153,.45) !important; }
+
+  /* Image box inside card */
+  .ev-img-box {
+    width: 100% !important;
+    height: 180px !important;
+    min-height: 180px !important;
+    flex-shrink: 0 !important;
+    overflow: hidden !important;
+    background: #070e1b;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+  .ev-img-box img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    transition: transform .3s;
+  }
+  .ev-card:hover .ev-img-box img { transform: scale(1.05); }
+
+  /* Text body — fills remaining 158px */
+  .ev-body {
+    flex: 1 !important;
+    padding: 14px 16px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px;
+    overflow: hidden;
+  }
+  .ev-cls  { font-size: .62rem; color: #94a3b8; letter-spacing: .08em; text-transform: uppercase; margin: 0; }
+  .ev-conf { font-size: 1rem; font-weight: 700; color: #fff; margin: 2px 0 0; }
+  .ev-row  { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .ev-ts   { font-size: .58rem; color: #475569; }
+  .ev-badge        { font-size: .6rem; font-weight: 700; padding: 3px 10px; border-radius: 4px; letter-spacing: .06em; }
+  .ev-badge.High   { background: rgba(239,68,68,.18);  color: #f87171; }
+  .ev-badge.Medium { background: rgba(245,158,11,.18); color: #fbbf24; }
+  .ev-badge.Low    { background: rgba(52,211,153,.18); color: #34d399; }
+  .ev-btn {
+    margin-top: auto;
+    padding: 8px;
+    border: 1px solid rgba(255,255,255,.1);
+    background: transparent;
+    color: #94a3b8;
+    font-size: .62rem;
+    letter-spacing: .12em;
+    cursor: pointer;
+    width: 100%;
+    border-radius: 4px;
+    text-transform: uppercase;
+    transition: background .2s, color .2s;
+  }
+  .ev-btn:hover { background: rgba(255,255,255,.07); color: #e2e8f0; }
+
+  /* Active filter button */
+  .lf-btn.lf-active {
+    background: #22d3ee !important;
+    color: #000 !important;
+    border-color: #22d3ee !important;
+    font-weight: 800 !important;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="h-[calc(100vh-64px)] bg-[#050914] text-slate-200 p-6 flex flex-col">
+<div style="background:#050914;color:#cbd5e1;padding:1.5rem;min-height:calc(100vh - 64px - 32px);display:flex;flex-direction:column;gap:1.25rem;box-sizing:border-box;">
 
   <!-- HEADER -->
-  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
     <div>
-      <h1 class="text-3xl font-bold tracking-wider text-white">CLASSIFIED DETECTION LOGS</h1>
-      <p class="text-xs text-cyan-400 tracking-widest">Evidence Archive • Neural Scan Feed</p>
+      <h1 style="font-size:1.8rem;font-weight:800;letter-spacing:.1em;color:#fff;margin:0;">CLASSIFIED DETECTION LOGS</h1>
+      <p style="font-size:.65rem;color:#22d3ee;letter-spacing:.2em;margin:.25rem 0 0;">Evidence Archive • Neural Scan Feed</p>
     </div>
-
-    <button id="refreshLogs"
-      class="px-5 py-2 bg-cyan-400 text-black text-xs font-bold tracking-widest hover:bg-cyan-300 transition">
-      REFRESH
-    </button>
+    <button id="refreshLogs" style="padding:9px 24px;background:#22d3ee;color:#000;font-size:.7rem;font-weight:700;letter-spacing:.15em;border:none;cursor:pointer;border-radius:4px;">REFRESH</button>
   </div>
 
   <!-- STATS -->
-  <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-
-    <div class="bg-[#0e1520] p-4 border border-white/5 rounded-lg">
-      <p class="text-xs text-slate-400">TOTAL LOGS</p>
-      <h2 id="logCount" class="text-3xl text-emerald-400 font-bold">0</h2>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;">
+    <div style="background:#0e1520;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:1rem 1.25rem;">
+      <p style="font-size:.6rem;letter-spacing:.12em;color:#94a3b8;margin:0 0 .4rem;">TOTAL LOGS</p>
+      <p id="logCount" style="font-size:2.4rem;font-weight:700;color:#34d399;margin:0;line-height:1;">0</p>
     </div>
-
-    <div class="bg-[#0e1520] p-4 border border-white/5 rounded-lg">
-      <p class="text-xs text-slate-400">HIGH ALERTS</p>
-      <h2 id="liveCount" class="text-3xl text-red-400 font-bold">0</h2>
+    <div style="background:#0e1520;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:1rem 1.25rem;">
+      <p style="font-size:.6rem;letter-spacing:.12em;color:#94a3b8;margin:0 0 .4rem;">HIGH ALERTS</p>
+      <p id="liveCount" style="font-size:2.4rem;font-weight:700;color:#f87171;margin:0;line-height:1;">0</p>
     </div>
-
-    <div class="bg-[#0e1520] p-4 border border-white/5 rounded-lg">
-      <p class="text-xs text-slate-400">NODE LATENCY</p>
-      <h2 class="text-3xl text-amber-400 font-bold" id="metricLatency">--<span class="text-xs">ms</span></h2>
+    <div style="background:#0e1520;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:1rem 1.25rem;">
+      <p style="font-size:.6rem;letter-spacing:.12em;color:#94a3b8;margin:0 0 .4rem;">NODE LATENCY</p>
+      <p id="metricLatency" style="font-size:2.4rem;font-weight:700;color:#fbbf24;margin:0;line-height:1;">—<span style="font-size:.8rem;">ms</span></p>
     </div>
-
   </div>
 
   <!-- FILTERS -->
-  <div class="flex flex-wrap gap-3 mb-6">
-    <button class="filter-btn active">ALL</button>
-    <button class="filter-btn">HIGH</button>
-    <button class="filter-btn">MEDIUM</button>
-    <button class="filter-btn">LOW</button>
+  <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
+    <button class="lf-btn lf-active" data-f="ALL"    style="padding:8px 20px;font-size:.72rem;font-weight:700;letter-spacing:.12em;border:1px solid #22d3ee;background:#22d3ee;color:#000;cursor:pointer;border-radius:4px;">ALL</button>
+    <button class="lf-btn"           data-f="High"   style="padding:8px 20px;font-size:.72rem;font-weight:600;letter-spacing:.12em;border:1px solid rgba(255,255,255,.15);background:transparent;color:#94a3b8;cursor:pointer;border-radius:4px;">HIGH</button>
+    <button class="lf-btn"           data-f="Medium" style="padding:8px 20px;font-size:.72rem;font-weight:600;letter-spacing:.12em;border:1px solid rgba(255,255,255,.15);background:transparent;color:#94a3b8;cursor:pointer;border-radius:4px;">MEDIUM</button>
+    <button class="lf-btn"           data-f="Low"    style="padding:8px 20px;font-size:.72rem;font-weight:600;letter-spacing:.12em;border:1px solid rgba(255,255,255,.15);background:transparent;color:#94a3b8;cursor:pointer;border-radius:4px;">LOW</button>
   </div>
 
-  <!-- GRID -->
-  <div id="logsGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto flex-1 pr-2">
-    <div class="flex items-center justify-center h-40 border border-white/10 text-slate-400">
-      Loading logs...
-    </div>
+  <!-- CARD GRID -->
+  <div id="logsGrid">
+    <p style="grid-column:1/-1;text-align:center;padding:3rem;color:#475569;">Loading...</p>
   </div>
 
 </div>
@@ -60,131 +165,93 @@
 <script>
   const state = { logs: [], filter: 'ALL' };
 
-  function getRiskColor(level) {
-    if (level === 'High') return 'border-red-500';
-    if (level === 'Medium') return 'border-amber-500';
-    return 'border-emerald-500';
-  }
+  document.querySelectorAll('.lf-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.lf-btn').forEach(b => {
+        b.classList.remove('lf-active');
+        b.style.background = 'transparent';
+        b.style.color = '#94a3b8';
+        b.style.borderColor = 'rgba(255,255,255,.15)';
+      });
+      btn.classList.add('lf-active');
+      btn.style.background = '#22d3ee';
+      btn.style.color = '#000';
+      btn.style.borderColor = '#22d3ee';
+      state.filter = btn.dataset.f;
+      renderLogs();
+    });
+  });
 
   function updateCounters(logs) {
-    document.getElementById('logCount').textContent = logs.length;
-    const high = logs.filter(l => (l.risk_level || 'Low') === 'High').length;
-    document.getElementById('liveCount').textContent = high;
+    document.getElementById('logCount').textContent  = logs.length;
+    document.getElementById('liveCount').textContent = logs.filter(l => (l.risk_level||'Low')==='High').length;
   }
 
   function renderLogs() {
     const grid = document.getElementById('logsGrid');
     let logs = state.logs;
-
     if (state.filter !== 'ALL') {
-      const map = { HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low' };
-      logs = logs.filter(l => (l.risk_level || 'Low') === map[state.filter]);
+      logs = logs.filter(l => (l.risk_level||'Low') === state.filter);
     }
-
     if (!logs.length) {
-      grid.innerHTML = `<div class="col-span-full text-center text-slate-400">No Logs Found</div>`;
+      grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;padding:3rem;color:#475569;">No logs found.</p>';
       return;
     }
-
     grid.innerHTML = logs.map(log => {
-      const img = log.frame_file || log.image_file;
-      const risk = log.risk_level || 'Low';
-      const conf = (log.confidence || 0).toFixed(2);
-
+      const imgFile = log.frame_file || log.image_file;
+      const risk    = log.risk_level || 'Low';
+      const confRaw = log.confidence || 0;
+      const conf    = (confRaw <= 1 ? confRaw * 100 : confRaw).toFixed(1) + '%';
+      const ts      = (log.timestamp || '').replace('T', ' ').slice(0, 19);
+      const cls     = log.class_name || 'Unknown';
+      const imgInner = imgFile
+        ? `<img src="/evidence/${imgFile}" alt="${cls}" loading="lazy"
+               onerror="this.outerHTML='<span style=\\'font-size:.5rem;color:#1e3050;letter-spacing:.15em\\'>NO&nbsp;SIGNAL</span>'" />`
+        : `<span style="font-size:.5rem;color:#1e3050;letter-spacing:.15em">NO SIGNAL</span>`;
       return `
-      <div class="bg-[#0e1520] border ${getRiskColor(risk)} rounded-xl overflow-hidden shadow-md hover:shadow-cyan-500/10 transition group">
-
-        <!-- IMAGE -->
-        <div class="w-full h-44 overflow-hidden bg-black">
-          <img src="/evidence/${img}" 
-               class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-        </div>
-
-        <!-- CONTENT -->
-        <div class="p-4 flex flex-col gap-2">
-
-          <div>
-            <p class="text-xs text-slate-400">${log.class_name || 'Unknown'}</p>
-            <h3 class="text-lg font-bold text-white">Confidence: ${conf}</h3>
+        <div class="ev-card ${risk}">
+          <div class="ev-img-box">${imgInner}</div>
+          <div class="ev-body">
+            <div>
+              <p class="ev-cls">${cls}</p>
+              <p class="ev-conf">Confidence: ${conf}</p>
+            </div>
+            <div class="ev-row">
+              <span class="ev-badge ${risk}">${risk}</span>
+              <span class="ev-ts">${ts}</span>
+            </div>
+            <button class="ev-btn">VIEW DETAILS</button>
           </div>
-
-          <div class="flex justify-between text-xs text-slate-400">
-            <span>${risk}</span>
-            <span>${log.timestamp || ''}</span>
-          </div>
-
-          <button class="mt-2 py-2 border border-white/10 text-xs text-slate-300 hover:bg-white/10 transition">
-            VIEW DETAILS
-          </button>
-
-        </div>
-      </div>
-    `;
+        </div>`;
     }).join('');
   }
 
-  async function loadLogs() {
+  async function fetchLogs() {
+    const grid = document.getElementById('logsGrid');
+    grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;padding:3rem;color:#475569;">Loading...</p>';
     try {
-      const res = await fetch('/evidence');
-      const data = await res.json();
-      state.logs = Array.isArray(data) ? data : [];
+      const r = await fetch('/evidence/list');
+      const d = await r.json();
+      state.logs = Array.isArray(d) ? d : [];
       updateCounters(state.logs);
       renderLogs();
-    } catch (err) {
-      document.getElementById('logsGrid').innerHTML = '<div class="text-red-400">Error loading logs</div>';
+    } catch {
+      grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;padding:3rem;color:#f87171;">Error loading logs.</p>';
     }
   }
 
-  async function syncStatus() {
+  async function fetchStatus() {
     try {
-      const res = await fetch('/api/status');
-      const d = await res.json();
-      const latency = d.edge_mode?.avg_latency_ms ?? '—';
-      const accurate = d.model_is_custom ? '96.1%' : (d.accuracy_claim || 'N/A');
-      
-      const latLabel = document.getElementById('metricLatency');
-      if (latLabel) latLabel.innerHTML = latency + '<span class="text-xs">ms</span>';
-      
-      const accLabel = document.getElementById('metricAccuracy');
-      if (accLabel) accLabel.textContent = accurate;
-    } catch(e) {}
+      const r = await fetch('/api/status');
+      const d = await r.json();
+      const lat = d.edge_mode?.avg_latency_ms ?? '—';
+      document.getElementById('metricLatency').innerHTML = lat + '<span style="font-size:.8rem;">ms</span>';
+    } catch (_) {}
   }
 
-  // FILTERS
-  document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      state.filter = btn.innerText.trim();
-      renderLogs();
-    });
-  });
-
-  document.getElementById('refreshLogs').addEventListener('click', loadLogs);
-
-  loadLogs();
-  syncStatus();
-  setInterval(syncStatus, 5000);
+  document.getElementById('refreshLogs').addEventListener('click', fetchLogs);
+  fetchLogs();
+  fetchStatus();
+  setInterval(fetchStatus, 5000);
 </script>
-
-<style>
-  .filter-btn {
-    padding: 6px 14px;
-    font-size: 11px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #94a3b8;
-    transition: all 0.2s;
-  }
-
-  .filter-btn.active {
-    background: #22d3ee;
-    color: black;
-    border-color: #22d3ee;
-  }
-
-  .filter-btn:hover:not(.active) {
-    background: rgba(255, 255, 255, 0.05);
-  }
-</style>
-
 {% endblock %}
