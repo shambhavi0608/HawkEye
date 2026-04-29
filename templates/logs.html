@@ -1,8 +1,5 @@
-{% extends "base.html" %}
-
-{% block title %}EVIDENCE LOG | SENTINEL ALPHA{% endblock %}
-
-{% block head %}
+{% extends "base.html" %} {% block title %}EVIDENCE LOG | SENTINEL ALPHA{%
+endblock %} {% block head %}
 <style>
   /* ═══════════════════════════════════════════════════════════
      LOGS PAGE — plain CSS, loaded in <head> BEFORE Tailwind CDN
@@ -23,15 +20,37 @@
   }
 
   /* Webkit scrollbar */
-  #logsGrid::-webkit-scrollbar        { width: 8px; }
-  #logsGrid::-webkit-scrollbar-track  { background: rgba(255,255,255,.04); border-radius: 4px; }
-  #logsGrid::-webkit-scrollbar-thumb  { background: rgba(34,211,238,.5); border-radius: 4px; }
-  #logsGrid::-webkit-scrollbar-thumb:hover { background: rgba(34,211,238,.8); }
+  #logsGrid::-webkit-scrollbar {
+    width: 8px;
+  }
+  #logsGrid::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 4px;
+  }
+  #logsGrid::-webkit-scrollbar-thumb {
+    background: rgba(34, 211, 238, 0.5);
+    border-radius: 4px;
+  }
+  #logsGrid::-webkit-scrollbar-thumb:hover {
+    background: rgba(34, 211, 238, 0.8);
+  }
 
   /* Responsive */
-  @media (max-width: 1280px) { #logsGrid { grid-template-columns: repeat(3, 1fr); } }
-  @media (max-width:  900px) { #logsGrid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width:  600px) { #logsGrid { grid-template-columns: 1fr; } }
+  @media (max-width: 1280px) {
+    #logsGrid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+  @media (max-width: 900px) {
+    #logsGrid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (max-width: 600px) {
+    #logsGrid {
+      grid-template-columns: 1fr;
+    }
+  }
 
   /* Card */
   .ev-card {
@@ -43,15 +62,23 @@
     overflow: hidden !important;
     background: #0e1520 !important;
     box-sizing: border-box !important;
-    transition: box-shadow .2s, transform .2s;
+    transition:
+      box-shadow 0.2s,
+      transform 0.2s;
   }
   .ev-card:hover {
-    box-shadow: 0 0 32px rgba(34,211,238,.14) !important;
+    box-shadow: 0 0 32px rgba(34, 211, 238, 0.14) !important;
     transform: translateY(-3px);
   }
-  .ev-card.High   { border: 2px solid rgba(239,68,68,.65) !important; }
-  .ev-card.Medium { border: 2px solid rgba(245,158,11,.65) !important; }
-  .ev-card.Low    { border: 2px solid rgba(52,211,153,.45) !important; }
+  .ev-card.High {
+    border: 2px solid rgba(239, 68, 68, 0.65) !important;
+  }
+  .ev-card.Medium {
+    border: 2px solid rgba(245, 158, 11, 0.65) !important;
+  }
+  .ev-card.Low {
+    border: 2px solid rgba(52, 211, 153, 0.45) !important;
+  }
 
   /* Image box inside card */
   .ev-img-box {
@@ -65,14 +92,52 @@
     align-items: center;
     justify-content: center;
   }
-  .ev-img-box img {
+  /* Scrollable image area for multiple images */
+  .ev-img-scroll {
     width: 100% !important;
-    height: 100% !important;
-    object-fit: cover !important;
-    display: block !important;
-    transition: transform .3s;
+    height: 180px !important;
+    min-height: 180px !important;
+    display: flex !important;
+    flex-direction: row;
+    overflow-x: auto !important;
+    overflow-y: hidden;
+    gap: 8px;
+    background: #070e1b;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 4px 0 4px 4px;
+    box-sizing: border-box;
   }
-  .ev-card:hover .ev-img-box img { transform: scale(1.05); }
+  .ev-img-scroll::-webkit-scrollbar {
+    height: 6px;
+  }
+  .ev-img-scroll::-webkit-scrollbar-thumb {
+    background: rgba(34, 211, 238, 0.3);
+    border-radius: 4px;
+  }
+  .ev-img-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(34, 211, 238, 0.7);
+  }
+
+  .ev-img-box img {
+    max-width: 100%;
+    max-height: 172px;
+    width: auto !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    background: #070e1b;
+    display: block !important;
+    margin-right: 0;
+    transition:
+      box-shadow 0.2s,
+      transform 0.3s;
+    border-radius: 6px;
+    box-shadow: 0 1px 8px rgba(34, 211, 238, 0.08);
+  }
+  .ev-card:hover .ev-img-box img {
+    box-shadow: 0 0 0 2px #22d3ee33;
+    transform: scale(1.03);
+  }
 
   /* Text body — fills remaining 158px */
   .ev-body {
@@ -83,29 +148,68 @@
     gap: 8px;
     overflow: hidden;
   }
-  .ev-cls  { font-size: .62rem; color: #94a3b8; letter-spacing: .08em; text-transform: uppercase; margin: 0; }
-  .ev-conf { font-size: 1rem; font-weight: 700; color: #fff; margin: 2px 0 0; }
-  .ev-row  { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .ev-ts   { font-size: .58rem; color: #475569; }
-  .ev-badge        { font-size: .6rem; font-weight: 700; padding: 3px 10px; border-radius: 4px; letter-spacing: .06em; }
-  .ev-badge.High   { background: rgba(239,68,68,.18);  color: #f87171; }
-  .ev-badge.Medium { background: rgba(245,158,11,.18); color: #fbbf24; }
-  .ev-badge.Low    { background: rgba(52,211,153,.18); color: #34d399; }
+  .ev-cls {
+    font-size: 0.62rem;
+    color: #94a3b8;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .ev-conf {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 2px 0 0;
+  }
+  .ev-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .ev-ts {
+    font-size: 0.58rem;
+    color: #475569;
+  }
+  .ev-badge {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 4px;
+    letter-spacing: 0.06em;
+  }
+  .ev-badge.High {
+    background: rgba(239, 68, 68, 0.18);
+    color: #f87171;
+  }
+  .ev-badge.Medium {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+  }
+  .ev-badge.Low {
+    background: rgba(52, 211, 153, 0.18);
+    color: #34d399;
+  }
   .ev-btn {
     margin-top: auto;
     padding: 8px;
-    border: 1px solid rgba(255,255,255,.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     background: transparent;
     color: #94a3b8;
-    font-size: .62rem;
-    letter-spacing: .12em;
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
     cursor: pointer;
     width: 100%;
     border-radius: 4px;
     text-transform: uppercase;
-    transition: background .2s, color .2s;
+    transition:
+      background 0.2s,
+      color 0.2s;
   }
-  .ev-btn:hover { background: rgba(255,255,255,.07); color: #e2e8f0; }
+  .ev-btn:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #e2e8f0;
+  }
 
   /* Active filter button */
   .lf-btn.lf-active {
@@ -115,102 +219,325 @@
     font-weight: 800 !important;
   }
 </style>
-{% endblock %}
-
-{% block content %}
-<div style="background:#050914;color:#cbd5e1;padding:1.5rem;min-height:calc(100vh - 64px - 32px);display:flex;flex-direction:column;gap:1.25rem;box-sizing:border-box;">
-
+{% endblock %} {% block content %}
+<div
+  style="
+    background: #050914;
+    color: #cbd5e1;
+    padding: 1.5rem;
+    min-height: calc(100vh - 64px - 32px);
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    box-sizing: border-box;
+  "
+>
   <!-- HEADER -->
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+  <div
+    style="
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    "
+  >
     <div>
-      <h1 style="font-size:1.8rem;font-weight:800;letter-spacing:.1em;color:#fff;margin:0;">CLASSIFIED DETECTION LOGS</h1>
-      <p style="font-size:.65rem;color:#22d3ee;letter-spacing:.2em;margin:.25rem 0 0;">Evidence Archive • Neural Scan Feed</p>
+      <h1
+        style="
+          font-size: 1.8rem;
+          font-weight: 800;
+          letter-spacing: 0.1em;
+          color: #fff;
+          margin: 0;
+        "
+      >
+        CLASSIFIED DETECTION LOGS
+      </h1>
+      <p
+        style="
+          font-size: 0.65rem;
+          color: #22d3ee;
+          letter-spacing: 0.2em;
+          margin: 0.25rem 0 0;
+        "
+      >
+        Evidence Archive • Neural Scan Feed
+      </p>
     </div>
-    <button id="refreshLogs" style="padding:9px 24px;background:#22d3ee;color:#000;font-size:.7rem;font-weight:700;letter-spacing:.15em;border:none;cursor:pointer;border-radius:4px;">REFRESH</button>
+    <button
+      id="refreshLogs"
+      style="
+        padding: 9px 24px;
+        background: #22d3ee;
+        color: #000;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.15em;
+        border: none;
+        cursor: pointer;
+        border-radius: 4px;
+      "
+    >
+      REFRESH
+    </button>
   </div>
 
   <!-- STATS -->
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;">
-    <div style="background:#0e1520;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:1rem 1.25rem;">
-      <p style="font-size:.6rem;letter-spacing:.12em;color:#94a3b8;margin:0 0 .4rem;">TOTAL LOGS</p>
-      <p id="logCount" style="font-size:2.4rem;font-weight:700;color:#34d399;margin:0;line-height:1;">0</p>
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem">
+    <div
+      style="
+        background: #0e1520;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+      "
+    >
+      <p
+        style="
+          font-size: 0.6rem;
+          letter-spacing: 0.12em;
+          color: #94a3b8;
+          margin: 0 0 0.4rem;
+        "
+      >
+        TOTAL LOGS
+      </p>
+      <p
+        id="logCount"
+        style="
+          font-size: 2.4rem;
+          font-weight: 700;
+          color: #34d399;
+          margin: 0;
+          line-height: 1;
+        "
+      >
+        0
+      </p>
     </div>
-    <div style="background:#0e1520;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:1rem 1.25rem;">
-      <p style="font-size:.6rem;letter-spacing:.12em;color:#94a3b8;margin:0 0 .4rem;">HIGH ALERTS</p>
-      <p id="liveCount" style="font-size:2.4rem;font-weight:700;color:#f87171;margin:0;line-height:1;">0</p>
+    <div
+      style="
+        background: #0e1520;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+      "
+    >
+      <p
+        style="
+          font-size: 0.6rem;
+          letter-spacing: 0.12em;
+          color: #94a3b8;
+          margin: 0 0 0.4rem;
+        "
+      >
+        HIGH ALERTS
+      </p>
+      <p
+        id="liveCount"
+        style="
+          font-size: 2.4rem;
+          font-weight: 700;
+          color: #f87171;
+          margin: 0;
+          line-height: 1;
+        "
+      >
+        0
+      </p>
     </div>
-    <div style="background:#0e1520;border:1px solid rgba(255,255,255,.07);border-radius:10px;padding:1rem 1.25rem;">
-      <p style="font-size:.6rem;letter-spacing:.12em;color:#94a3b8;margin:0 0 .4rem;">NODE LATENCY</p>
-      <p id="metricLatency" style="font-size:2.4rem;font-weight:700;color:#fbbf24;margin:0;line-height:1;">—<span style="font-size:.8rem;">ms</span></p>
+    <div
+      style="
+        background: #0e1520;
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 10px;
+        padding: 1rem 1.25rem;
+      "
+    >
+      <p
+        style="
+          font-size: 0.6rem;
+          letter-spacing: 0.12em;
+          color: #94a3b8;
+          margin: 0 0 0.4rem;
+        "
+      >
+        NODE LATENCY
+      </p>
+      <p
+        id="metricLatency"
+        style="
+          font-size: 2.4rem;
+          font-weight: 700;
+          color: #fbbf24;
+          margin: 0;
+          line-height: 1;
+        "
+      >
+        —<span style="font-size: 0.8rem">ms</span>
+      </p>
     </div>
   </div>
 
   <!-- FILTERS -->
-  <div style="display:flex;gap:.6rem;flex-wrap:wrap;">
-    <button class="lf-btn lf-active" data-f="ALL"    style="padding:8px 20px;font-size:.72rem;font-weight:700;letter-spacing:.12em;border:1px solid #22d3ee;background:#22d3ee;color:#000;cursor:pointer;border-radius:4px;">ALL</button>
-    <button class="lf-btn"           data-f="High"   style="padding:8px 20px;font-size:.72rem;font-weight:600;letter-spacing:.12em;border:1px solid rgba(255,255,255,.15);background:transparent;color:#94a3b8;cursor:pointer;border-radius:4px;">HIGH</button>
-    <button class="lf-btn"           data-f="Medium" style="padding:8px 20px;font-size:.72rem;font-weight:600;letter-spacing:.12em;border:1px solid rgba(255,255,255,.15);background:transparent;color:#94a3b8;cursor:pointer;border-radius:4px;">MEDIUM</button>
-    <button class="lf-btn"           data-f="Low"    style="padding:8px 20px;font-size:.72rem;font-weight:600;letter-spacing:.12em;border:1px solid rgba(255,255,255,.15);background:transparent;color:#94a3b8;cursor:pointer;border-radius:4px;">LOW</button>
+  <div style="display: flex; gap: 0.6rem; flex-wrap: wrap">
+    <button
+      class="lf-btn lf-active"
+      data-f="ALL"
+      style="
+        padding: 8px 20px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        border: 1px solid #22d3ee;
+        background: #22d3ee;
+        color: #000;
+        cursor: pointer;
+        border-radius: 4px;
+      "
+    >
+      ALL
+    </button>
+    <button
+      class="lf-btn"
+      data-f="High"
+      style="
+        padding: 8px 20px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: transparent;
+        color: #94a3b8;
+        cursor: pointer;
+        border-radius: 4px;
+      "
+    >
+      HIGH
+    </button>
+    <button
+      class="lf-btn"
+      data-f="Medium"
+      style="
+        padding: 8px 20px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: transparent;
+        color: #94a3b8;
+        cursor: pointer;
+        border-radius: 4px;
+      "
+    >
+      MEDIUM
+    </button>
+    <button
+      class="lf-btn"
+      data-f="Low"
+      style="
+        padding: 8px 20px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: transparent;
+        color: #94a3b8;
+        cursor: pointer;
+        border-radius: 4px;
+      "
+    >
+      LOW
+    </button>
   </div>
 
   <!-- CARD GRID -->
   <div id="logsGrid">
-    <p style="grid-column:1/-1;text-align:center;padding:3rem;color:#475569;">Loading...</p>
+    <p
+      style="
+        grid-column: 1/-1;
+        text-align: center;
+        padding: 3rem;
+        color: #475569;
+      "
+    >
+      Loading...
+    </p>
   </div>
-
 </div>
-{% endblock %}
-
-{% block scripts %}
+{% endblock %} {% block scripts %}
 <script>
-  const state = { logs: [], filter: 'ALL' };
+  const state = { logs: [], filter: "ALL" };
 
-  document.querySelectorAll('.lf-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.lf-btn').forEach(b => {
-        b.classList.remove('lf-active');
-        b.style.background = 'transparent';
-        b.style.color = '#94a3b8';
-        b.style.borderColor = 'rgba(255,255,255,.15)';
+  document.querySelectorAll(".lf-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".lf-btn").forEach((b) => {
+        b.classList.remove("lf-active");
+        b.style.background = "transparent";
+        b.style.color = "#94a3b8";
+        b.style.borderColor = "rgba(255,255,255,.15)";
       });
-      btn.classList.add('lf-active');
-      btn.style.background = '#22d3ee';
-      btn.style.color = '#000';
-      btn.style.borderColor = '#22d3ee';
+      btn.classList.add("lf-active");
+      btn.style.background = "#22d3ee";
+      btn.style.color = "#000";
+      btn.style.borderColor = "#22d3ee";
       state.filter = btn.dataset.f;
       renderLogs();
     });
   });
 
   function updateCounters(logs) {
-    document.getElementById('logCount').textContent  = logs.length;
-    document.getElementById('liveCount').textContent = logs.filter(l => (l.risk_level||'Low')==='High').length;
+    document.getElementById("logCount").textContent = logs.length;
+    document.getElementById("liveCount").textContent = logs.filter(
+      (l) => (l.risk_level || "Low") === "High",
+    ).length;
   }
 
   function renderLogs() {
-    const grid = document.getElementById('logsGrid');
+    const grid = document.getElementById("logsGrid");
     let logs = state.logs;
-    if (state.filter !== 'ALL') {
-      logs = logs.filter(l => (l.risk_level||'Low') === state.filter);
+    if (state.filter !== "ALL") {
+      logs = logs.filter((l) => (l.risk_level || "Low") === state.filter);
     }
     if (!logs.length) {
-      grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;padding:3rem;color:#475569;">No logs found.</p>';
+      grid.innerHTML =
+        '<p style="grid-column:1/-1;text-align:center;padding:3rem;color:#475569;">No logs found.</p>';
       return;
     }
-    grid.innerHTML = logs.map(log => {
-      const imgFile = log.frame_file || log.image_file;
-      const risk    = log.risk_level || 'Low';
-      const confRaw = log.confidence || 0;
-      const conf    = (confRaw <= 1 ? confRaw * 100 : confRaw).toFixed(1) + '%';
-      const ts      = (log.timestamp || '').replace('T', ' ').slice(0, 19);
-      const cls     = log.class_name || 'Unknown';
-      const imgInner = imgFile
-        ? `<img src="/evidence/${imgFile}" alt="${cls}" loading="lazy"
-               onerror="this.outerHTML='<span style=\\'font-size:.5rem;color:#1e3050;letter-spacing:.15em\\'>NO&nbsp;SIGNAL</span>'" />`
-        : `<span style="font-size:.5rem;color:#1e3050;letter-spacing:.15em">NO SIGNAL</span>`;
-      return `
+    grid.innerHTML = logs
+      .map((log) => {
+        // Support multiple images per log (array or single)
+        let imgFiles = [];
+        if (Array.isArray(log.images)) {
+          imgFiles = log.images;
+        } else if (log.frame_file || log.image_file) {
+          imgFiles = [log.frame_file || log.image_file];
+        }
+        const risk = log.risk_level || "Low";
+        const confRaw = log.confidence || 0;
+        const conf = (confRaw <= 1 ? confRaw * 100 : confRaw).toFixed(1) + "%";
+        const ts = (log.timestamp || "").replace("T", " ").slice(0, 19);
+        const cls = log.class_name || "Unknown";
+        let imgInner = "";
+        if (imgFiles.length > 0) {
+          imgInner =
+            `<div class="ev-img-scroll">` +
+            imgFiles
+              .map((imgFile) =>
+                imgFile
+                  ? `<div class="ev-img-box"><img src="/evidence/${imgFile}" alt="${cls}" loading="lazy"
+            onerror="this.outerHTML='<span style=\'font-size:.5rem;color:#1e3050;letter-spacing:.15em\'>NO&nbsp;SIGNAL</span>'" /></div>`
+                  : `<div class="ev-img-box"><span style="font-size:.5rem;color:#1e3050;letter-spacing:.15em">NO SIGNAL</span></div>`,
+              )
+              .join("") +
+            `</div>`;
+        } else {
+          imgInner = `<div class="ev-img-scroll"><div class="ev-img-box"><span style="font-size:.5rem;color:#1e3050;letter-spacing:.15em">NO SIGNAL</span></div></div>`;
+        }
+        return `
         <div class="ev-card ${risk}">
-          <div class="ev-img-box">${imgInner}</div>
+          ${imgInner}
           <div class="ev-body">
             <div>
               <p class="ev-cls">${cls}</p>
@@ -223,33 +550,48 @@
             <button class="ev-btn">VIEW DETAILS</button>
           </div>
         </div>`;
-    }).join('');
+      })
+      .join("");
   }
 
   async function fetchLogs() {
-    const grid = document.getElementById('logsGrid');
-    grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;padding:3rem;color:#475569;">Loading...</p>';
+    const grid = document.getElementById("logsGrid");
+    grid.innerHTML =
+      '<p style="grid-column:1/-1;text-align:center;padding:3rem;color:#475569;">Loading...</p>';
     try {
-      const r = await fetch('/evidence/list');
-      const d = await r.json();
+      const r = await fetch("/evidence");
+      const text = await r.text();
+      console.log("/evidence raw response:", text);
+      let d;
+      try {
+        d = JSON.parse(text);
+      } catch (e) {
+        console.error("JSON parse error:", e);
+        grid.innerHTML =
+          '<p style="grid-column:1/-1;text-align:center;padding:3rem;color:#f87171;">Error parsing logs JSON.</p>';
+        return;
+      }
       state.logs = Array.isArray(d) ? d : [];
       updateCounters(state.logs);
       renderLogs();
-    } catch {
-      grid.innerHTML = '<p style="grid-column:1/-1;text-align:center;padding:3rem;color:#f87171;">Error loading logs.</p>';
+    } catch (err) {
+      console.error("Fetch error:", err);
+      grid.innerHTML =
+        '<p style="grid-column:1/-1;text-align:center;padding:3rem;color:#f87171;">Error loading logs.</p>';
     }
   }
 
   async function fetchStatus() {
     try {
-      const r = await fetch('/api/status');
+      const r = await fetch("/api/status");
       const d = await r.json();
-      const lat = d.edge_mode?.avg_latency_ms ?? '—';
-      document.getElementById('metricLatency').innerHTML = lat + '<span style="font-size:.8rem;">ms</span>';
+      const lat = d.edge_mode?.avg_latency_ms ?? "—";
+      document.getElementById("metricLatency").innerHTML =
+        lat + '<span style="font-size:.8rem;">ms</span>';
     } catch (_) {}
   }
 
-  document.getElementById('refreshLogs').addEventListener('click', fetchLogs);
+  document.getElementById("refreshLogs").addEventListener("click", fetchLogs);
   fetchLogs();
   fetchStatus();
   setInterval(fetchStatus, 5000);
