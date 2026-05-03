@@ -26,12 +26,6 @@ class RiskScorer:
         self.w1 = w1
         self.w2 = w2
         self.w3 = w3
-        self.class_severity = {
-            "Shotgun": 1.0,
-            "Rifle": 0.95,
-            "Handgun": 0.85,
-            "Knife": 0.65,
-        }
 
     def _compute_area_score(self, bbox: List[int], frame_shape: Tuple[int, int]) -> float:
         """Normalized bounding box area relative to frame area."""
@@ -109,10 +103,8 @@ class RiskScorer:
 
         as_score = self._compute_area_score(bbox, frame_shape)
         ps = self._compute_spatial_priority(bbox, frame_shape, roi_zones, in_roi)
-        severity = self.class_severity.get(class_name, 0.75)
 
         r = self.w1 * cs + self.w2 * as_score + self.w3 * ps
-        r *= 0.65 + (0.35 * severity)
         r = round(min(1.0, r), 4)
         level = self.get_risk_level(r)
 
@@ -123,6 +115,5 @@ class RiskScorer:
                 "confidence": round(cs, 4),
                 "area": round(as_score, 4),
                 "spatial_priority": round(ps, 4),
-                "class_severity": round(severity, 4),
             },
         }

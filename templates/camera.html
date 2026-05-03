@@ -175,7 +175,7 @@
       escapeHtml(file.type || '—') +
       '</span></div>' +
       '<div class="flex justify-between"><span>Mode</span><span>' +
-      (isVideoFile(file) ? 'Video → /detect/video' : 'Image → /detect/image') +
+      (isVideoFile(file) ? 'Video → /upload_video' : 'Image → /upload_image') +
       '</span></div>';
     metaBox.innerHTML = baseMetaHtml;
   }
@@ -257,7 +257,7 @@
       try {
         const formData = new FormData();
         formData.append('video', selectedFile);
-        const res = await fetch('/detect/video', { method: 'POST', body: formData });
+        const res = await fetch('/upload_video', { method: 'POST', body: formData });
         const data = await res.json();
 
         if (!res.ok || data.error || !data.download_url) {
@@ -333,7 +333,7 @@
     formData.append('image', selectedFile);
 
     try {
-      const res = await fetch('/detect/image', { method: 'POST', body: formData });
+      const res = await fetch('/upload_image', { method: 'POST', body: formData });
       const data = await res.json();
 
       if (!res.ok || data.error) {

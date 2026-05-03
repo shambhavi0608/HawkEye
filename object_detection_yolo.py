@@ -5,13 +5,13 @@ import random
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEAPON_MODEL = os.path.join(BASE_DIR, "weapon_model.pt")
-COCO_MODEL = os.path.join(BASE_DIR, "yolov8l.pt")
+COCO_MODEL = os.path.join(BASE_DIR, "yolov8s.pt")
 MODEL_PATH = WEAPON_MODEL if os.path.exists(WEAPON_MODEL) else COCO_MODEL
 print(f"[INFO] Using model: {MODEL_PATH}")
 model = YOLO(MODEL_PATH)
 cap = cv2.VideoCapture(0)
 class_colors = {}
-img_size = 960
+img_size = 640
 while True:
     ret, frame = cap.read()
     if not ret:

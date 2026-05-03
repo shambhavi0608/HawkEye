@@ -10,7 +10,7 @@ Runtime pipeline:
   Alert Cooldown (Δt=5s) -> Automated Evidence Logging -> User Feedback Loop
 
 Paper contributions implemented in this codebase:
-  (i)   Multi-source dataset aggregation (Google Open Images, Roboflow, Kaggle,
+  (i)   Multi-source dataset aggregation (Hugging Face, GitHub, Roboflow, Kaggle,
          controlled CCTV capture) — training conducted externally; repo ships
          yolov8s.pt + optional weapon_model.pt from Hugging Face.
   (ii)  YOLOv8s with 5-fold cross-validation (mAP@50 ≥ 0.95 reported in paper;
@@ -30,7 +30,7 @@ Paper contributions implemented in this codebase:
 Repository correction note:
   This repo ships yolov8s.pt (COCO weights) plus optional weapon_model.pt from
   Hugging Face (Subh775/Threat-Detection-YOLOv8n). The 25,000-image custom
-  dataset, validated 96.1% mAP@50 report, and TensorRT artifacts are not
+  dataset, validated 92.8% mAP@50 report, and TensorRT artifacts are not
   bundled; those figures originate from the paper's training environment.
 """
 
@@ -59,7 +59,6 @@ DEMO_MODE = False
 # Primary Neural Surveillance Engine (YOLOv8s)
 # Balanced variant offering high precision with real-time CPU feasibility
 MODEL_PATH = "yolov8s.pt" 
-PERSON_MODEL_PATH = "yolov8n.pt"
 
 EVIDENCE_DIR = os.path.join(os.path.dirname(__file__), "evidence_logs")
 FEEDBACK_DIR = os.path.join(os.path.dirname(__file__), "feedback_data")
@@ -74,12 +73,9 @@ from detector import WeaponDetector
 from post_processing.temporal_filter import TemporalConsistencyFilter
 from post_processing.confidence_stabilizer import ConfidenceStabilizer
 from post_processing.risk_scorer import RiskScorer
-from post_processing.scene_filter import SceneAwareFilter
 from post_processing.roi_monitor import ROIMonitor
 from post_processing.evidence_logger import EvidenceLogger
 from post_processing.alert_cooldown import AlertCooldown
-from post_processing.edge_mode import EdgeModeManager
-from post_processing.feedback_loop import FeedbackLoop
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # FLASK APP
@@ -91,24 +87,12 @@ app.config["MAX_CONTENT_LENGTH"] = 500 * 1024 * 1024  # 500 MB upload limit
 # GLOBAL PIPELINE COMPONENTS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 detector     = WeaponDetector(model_path=MODEL_PATH)
-temporal     = TemporalConsistencyFilter(window_size=5, min_hits=2, min_confidence=0.25)
+temporal     = TemporalConsistencyFilter(window_size=5, min_hits=1, min_confidence=0.10)
 stabilizer   = ConfidenceStabilizer(alpha=0.4)
 risk_scorer  = RiskScorer(w1=0.5, w2=0.3, w3=0.2)
-scene_filter = SceneAwareFilter(PERSON_MODEL_PATH, conf_threshold=0.25)
 roi_monitor  = ROIMonitor()
 ev_logger    = EvidenceLogger(EVIDENCE_DIR)
 cooldown     = AlertCooldown(cooldown_seconds=5.0)   # Paper Section IV-J: Δt = 5 seconds
-edge_mgr     = EdgeModeManager(
-    full_model_path=MODEL_PATH,        # yolov8s.pt
-    edge_model_path=PERSON_MODEL_PATH, # yolov8n.pt  (lightweight, Jetson-ready)
-    latency_trigger_ms=40.0,           # Paper Section IV-K: switch when latency > 40 ms
-    latency_trigger_frames=5,          # Require 5 consecutive high-latency frames
-    memory_trigger_mb=2048.0,          # Paper: switch when GPU free < 2 GB
-    recovery_latency_ms=30.0,
-    recovery_memory_mb=3072.0,
-    recovery_window=15,
-)
-feedback     = FeedbackLoop(FEEDBACK_DIR)
 
 SESSION_ID = str(uuid.uuid4())[:8]
 
@@ -160,11 +144,8 @@ def _run_full_pipeline(
         for det in raw_detections:
             det["confidence"] = stabilizer.smooth(det["class_name"], det["confidence"])
 
-    # 4. Scene-Aware Filter (skipped for analytics uploads)
-    if bypass_scene:
-        filtered = raw_detections
-    else:
-        filtered = scene_filter.filter(raw_detections, frame)
+    # 4. Scene-Aware Filter removed
+    filtered = raw_detections
 
     # 5. ROI FILTERING + Risk Scoring
     # If ROI zones are defined: ONLY keep detections whose centroid is inside a zone
@@ -186,7 +167,6 @@ def _run_full_pipeline(
         region_key = "roi" if in_roi else "global"
         det_id = f"{det['class_name']}_{SESSION_ID}_{int(time.time()*1000)}"
         det["detection_id"] = det_id
-        feedback.register_detection(det_id, det)
 
         do_alert = force_log or cooldown.should_alert(det["class_name"], region_key)
         det["alerted"] = do_alert
@@ -210,14 +190,7 @@ def _run_full_pipeline(
 
         annotated_dets.append(det)
 
-    # 7. Edge Mode — skip when serving fixed-res analytics (avoid skewing live tuning)
-    if inference_imgsz is None:
-        edge_cfg = edge_mgr.check_and_adapt(latency)
-        if not ignore_roi:
-            if edge_cfg.get("mode_changed") and edge_cfg.get("model_variant") is not None:
-                detector.switch_model(edge_cfg["model_variant"], edge_cfg["input_size"])
-            elif edge_cfg.get("mode_changed"):
-                detector.input_size = edge_cfg["input_size"]
+    # 7. Edge Mode removed
 
     # 8. Draw ROI overlay then detections
     annotated_frame = frame.copy()
@@ -259,7 +232,7 @@ def capture_thread_fn():
 
 def inference_thread_fn():
     global latest_frame, latest_boxes, webcam_active
-    local_temporal = TemporalConsistencyFilter(window_size=5, min_hits=2, min_confidence=0.20)
+    local_temporal = TemporalConsistencyFilter(window_size=5, min_hits=1, min_confidence=0.10)
     while webcam_active:
         frame_copy = None
         with stream_lock:
@@ -353,7 +326,7 @@ def video_page():
     return render_template("video.html", active="video")
 
 
-@app.route("/detect/image", methods=["POST"])
+@app.route("/upload_image", methods=["POST"])
 def detect_image():
     """
     Accept an uploaded image file, run full pipeline, return:
@@ -476,7 +449,7 @@ def _process_video_job(job_id: str, in_path: str, raw_out: str, out_path: str, f
 
         # Paper-aligned temporal filter: N=5, K=3, τ=0.30 (Section IV-D)
         local_temporal = TemporalConsistencyFilter(
-            window_size=5, min_hits=3, min_confidence=0.30
+            window_size=5, min_hits=1, min_confidence=0.10
         )
 
         frame_idx   = 0
@@ -556,11 +529,11 @@ def _process_video_job(job_id: str, in_path: str, raw_out: str, out_path: str, f
 
 
 
-@app.route("/detect/video", methods=["POST"])
+@app.route("/upload_video", methods=["POST"])
 def detect_video():
     """
     Accept a video file; start async background processing; return job_id immediately.
-    The client should poll /detect/video/status/<job_id> for completion.
+    The client should poll /upload_video/status/<job_id> for completion.
     """
     if "video" not in request.files:
         return jsonify({"error": "No video file provided"}), 400
@@ -616,7 +589,7 @@ def detect_video():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/detect/video/status/<job_id>")
+@app.route("/upload_video/status/<job_id>")
 def detect_video_status(job_id):
     """Poll endpoint: returns current status of a video processing job."""
     with _jobs_lock:
@@ -636,7 +609,7 @@ def detect_video_status(job_id):
 
 
 
-@app.route("/stream/start", methods=["POST"])
+@app.route("/webcam/start", methods=["POST"])
 def stream_start():
     global webcam_active, stream_thread_handle, cam_error
     if webcam_active:
@@ -650,7 +623,7 @@ def stream_start():
     return jsonify({"status": "started"})
 
 
-@app.route("/stream/stop", methods=["POST"])
+@app.route("/webcam/stop", methods=["POST"])
 def stream_stop():
     global webcam_active, latest_frame, latest_boxes
     webcam_active = False
@@ -660,7 +633,7 @@ def stream_stop():
     return jsonify({"status": "stopped"})
 
 
-@app.route("/stream")
+@app.route("/webcam")
 def stream():
     return Response(generate_stream(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
@@ -725,7 +698,7 @@ def api_status():
     """Return current runtime status for the UI."""
     with stream_lock:
         boxes = copy.deepcopy(latest_boxes)
-    stats = edge_mgr.get_stats()
+    stats = {"current_mode": "Standard"}
     primary_model = os.path.basename(detector.model_path)
     aux_model = os.path.basename(detector.aux_path) if getattr(detector, "aux_model", None) else None
     if aux_model:
@@ -751,7 +724,7 @@ def api_status():
             "bundled_dataset":           False,
             "bundled_training_artifacts": False,
         },
-        "accuracy_claim":    "96.1% (Paper Target)" if is_custom else "N/A (Using Std Weights)",
+        "accuracy_claim":    "92.8% (Paper Target)" if is_custom else "N/A (Using Std Weights)",
         "session_id":        SESSION_ID,
         "webcam_active":     webcam_active,
         "cam_error":         cam_error,

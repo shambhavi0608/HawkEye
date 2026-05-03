@@ -52,12 +52,10 @@ class TemporalConsistencyFilter:
         window_size: int = 5,
         min_hits: int = 3,
         min_confidence: float = 0.30,
-        min_iou: float = 0.15,
     ):
         self.window_size = window_size
         self.min_hits = min_hits
         self.min_confidence = min_confidence
-        self.min_iou = min_iou
 
         self._buffer: deque = deque(maxlen=window_size)
 
@@ -93,7 +91,6 @@ class TemporalConsistencyFilter:
             for previous_frame in list(self._buffer)[:-1]:
                 matched = any(
                     prev.get("class_name") == det.get("class_name")
-                    and _iou_xyxy(prev.get("bbox", [0, 0, 0, 0]), det.get("bbox", [0, 0, 0, 0])) >= self.min_iou
                     for prev in previous_frame
                 )
                 if matched:

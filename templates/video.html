@@ -297,7 +297,7 @@
   // ── Poll ───────────────────────────────────
   async function _poll(jobId) {
     try {
-      const r = await fetch('/detect/video/status/' + jobId);
+      const r = await fetch('/upload_video/status/' + jobId);
       const d = await r.json();
       if (d.status === 'done')  { _showResult(d); return; }
       if (d.status === 'error') { _showError(d.error || 'Processing error'); return; }
@@ -326,7 +326,7 @@
     fd.append('video', selectedFile);
 
     try {
-      const res  = await fetch('/detect/video', { method: 'POST', body: fd });
+      const res  = await fetch('/upload_video', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok || data.error) { _showError(data.error || 'Upload failed (' + res.status + ')'); return; }
       if (data.job_id) {

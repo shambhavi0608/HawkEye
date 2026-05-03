@@ -1,0 +1,22 @@
+# YOLOv8 Weapon Detection Dataset Configuration
+# Sources: Hugging Face, GitHub, Roboflow, Kaggle
+# Total Images: ~25,000
+
+path: ../data/weapon_dataset  # dataset root dir
+train: images/train  # train images (relative to 'path') ~20,000 images
+val: images/val      # val images (relative to 'path') ~2,500 images
+test: images/test    # test images (relative to 'path') ~2,500 images
+
+# Classes
+names:
+  0: Handgun
+  1: Knife
+  2: Rifle
+  3: Shotgun
+
+# Source Distribution:
+# - Hugging Face Datasets: 10,400 images
+# - GitHub Open Repos: 3,600 images
+# - Roboflow Universe: 6,500 images
+# - Kaggle: 4,500 images
+# Total: 25,000 images

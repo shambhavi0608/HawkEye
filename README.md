@@ -204,7 +204,7 @@ Two-trigger switching (OR logic, paper Section IV-K):
 | `weapon_model.pt` | ✅ | Aux Hugging Face checkpoint (Subh775/Threat-Detection-YOLOv8n) |
 | `yolov8n.pt` | ✅ | Person detector + edge mode lightweight model |
 | Custom 25k training dataset | ❌ | Requires external download; use `prepare_weapon_dataset.py` |
-| Custom-trained best.pt (96.1% mAP) | ❌ | Run `train_yolov8s.py` with your dataset to produce it |
+| Custom-trained best.pt (92.8% mAP) | ❌ | Run `train_yolov8s.py` with your dataset to produce it |
 | TensorRT `.engine` | ❌ | Run `scripts/export_tensorrt.py` locally after training |
 
 ---

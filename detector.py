@@ -87,7 +87,7 @@ class WeaponDetector:
     def __init__(
         self,
         model_path: str | None = "yolov8s.pt",
-        conf_threshold: float = 0.25,
+        conf_threshold: float = 0.15,
         iou_threshold: float = 0.40,
         input_size: int = 640,  # Restoring high-fidelity resolution for YOLOv8s
     ):
@@ -229,7 +229,7 @@ class WeaponDetector:
         if cls_name in {"Handgun", "Gun", "Rifle", "Shotgun"}:
             # Relaxed upper bound (was 12.0) to tolerate occluded barrels.
             # Relaxed lower bound (was 0.05) for near-vertical grip-only views.
-            if aspect > 14.0 or aspect < 0.04:
+            if aspect > 14.0 or aspect < 0.01:
                 return False
 
         return True
